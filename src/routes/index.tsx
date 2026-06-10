@@ -33,6 +33,7 @@ function Index() {
   const [data, setData] = useState<MatrixData>(demoData);
   const [activeLocal, setActiveLocal] = useState<string>("ALL");
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (f?: File | null) => {
