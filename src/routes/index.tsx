@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X } from "lucide-react";
+import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, demoData, type MatrixData } from "@/lib/matrixParser";
@@ -34,6 +34,7 @@ function Index() {
   const [activeLocal, setActiveLocal] = useState<string>("ALL");
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (f?: File | null) => {
@@ -317,57 +318,102 @@ function Index() {
                   </tr>
                 </thead>
                 <tbody className="font-mono text-sm">
-                  {data.pyl.map((row) => {
-                    const isSel = row.concepto === selectedConcept;
-                    return (
-                      <tr
-                        key={row.concepto}
-                        onClick={() => setSelectedConcept(row.concepto)}
-                        className={`border-b border-white/5 cursor-pointer transition-colors ${
-                          row.esSubtotal
-                            ? "bg-white/[0.04] font-bold"
-                            : "hover:bg-cyan/[0.04]"
-                        } ${isSel ? "bg-cyan/10 hover:bg-cyan/10" : ""}`}
-                      >
-                        <td
-                          className={`px-5 py-3 sticky left-0 z-10 ${
-                            row.esSubtotal ? "bg-panel-2/90" : "bg-panel/80"
-                          } backdrop-blur ${isSel ? "text-cyan" : ""}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {isSel && <span className="text-cyan">›</span>}
-                            {row.concepto}
-                          </div>
-                        </td>
-                        {localesView.map((l) => {
-                          const v = row.porLocal[l] ?? 0;
-                          const ratio = row.total ? v / row.total : 0;
-                          return (
+                  {(() => {
+                    // Identificar grupos con hijos para saber qué es desplegable.
+                    const hasChildren = new Set<string>();
+                    data.pyl.forEach((r) => {
+                      if (r.grupo) hasChildren.add(r.grupo);
+                    });
+                    return data.pyl
+                      .filter((row) => {
+                        if (row.esGrupo) return true;
+                        // Hijo: ocultar si su grupo está colapsado (default colapsado).
+                        const c = collapsed[row.grupo ?? ""] ?? true;
+                        return !c;
+                      })
+                      .map((row) => {
+                        const isSel = row.concepto === selectedConcept;
+                        const isGroup = !!row.esGrupo;
+                        const expandable = isGroup && hasChildren.has(row.concepto);
+                        const isOpen = expandable
+                          ? !(collapsed[row.concepto] ?? true)
+                          : false;
+                        return (
+                          <tr
+                            key={row.concepto}
+                            onClick={() => {
+                              setSelectedConcept(row.concepto);
+                              if (expandable) {
+                                setCollapsed((s) => ({
+                                  ...s,
+                                  [row.concepto]: !(s[row.concepto] ?? true),
+                                }));
+                              }
+                            }}
+                            className={`border-b border-white/5 cursor-pointer transition-colors ${
+                              isGroup
+                                ? "bg-cyan/[0.06] font-bold border-l-2 border-l-cyan/60"
+                                : "hover:bg-cyan/[0.04] text-muted-foreground"
+                            } ${isSel ? "bg-cyan/10 hover:bg-cyan/10" : ""}`}
+                          >
                             <td
-                              key={l}
-                              className="px-5 py-3 text-right tabular-nums relative"
-                              style={{
-                                background: row.esSubtotal
-                                  ? undefined
-                                  : `linear-gradient(to left, color-mix(in oklab, var(--color-cyan) ${
-                                      ratio * 22
-                                    }%, transparent), transparent 70%)`,
-                              }}
+                              className={`px-5 py-3 sticky left-0 z-10 ${
+                                isGroup ? "bg-panel-2/95" : "bg-panel/80 pl-10"
+                              } backdrop-blur ${isSel ? "text-cyan" : ""}`}
                             >
-                              {fmtMoney(v)}
+                              <div className="flex items-center gap-2">
+                                {expandable ? (
+                                  isOpen ? (
+                                    <ChevronDown className="size-3.5 text-cyan" />
+                                  ) : (
+                                    <ChevronRight className="size-3.5 text-cyan" />
+                                  )
+                                ) : isGroup ? (
+                                  <span className="size-1.5 rounded-full bg-cyan/60 inline-block" />
+                                ) : null}
+                                <span
+                                  className={
+                                    isGroup
+                                      ? "uppercase tracking-wider text-xs text-cyan"
+                                      : ""
+                                  }
+                                >
+                                  {row.concepto}
+                                </span>
+                              </div>
                             </td>
-                          );
-                        })}
-                        <td
-                          className={`px-5 py-3 text-right tabular-nums bg-cyan/5 ${
-                            row.esSubtotal ? "text-cyan" : ""
-                          }`}
-                        >
-                          {fmtMoney(row.total)}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            {localesView.map((l) => {
+                              const v = row.porLocal[l] ?? 0;
+                              const ratio = row.total ? v / row.total : 0;
+                              return (
+                                <td
+                                  key={l}
+                                  className={`px-5 py-3 text-right tabular-nums relative ${
+                                    isGroup ? "text-foreground" : ""
+                                  }`}
+                                  style={{
+                                    background: isGroup
+                                      ? undefined
+                                      : `linear-gradient(to left, color-mix(in oklab, var(--color-cyan) ${
+                                          ratio * 22
+                                        }%, transparent), transparent 70%)`,
+                                  }}
+                                >
+                                  {fmtMoney(v)}
+                                </td>
+                              );
+                            })}
+                            <td
+                              className={`px-5 py-3 text-right tabular-nums bg-cyan/5 ${
+                                isGroup ? "text-cyan font-bold" : ""
+                              }`}
+                            >
+                              {fmtMoney(row.total)}
+                            </td>
+                          </tr>
+                        );
+                      });
+                  })()}
                 </tbody>
               </table>
             </div>
