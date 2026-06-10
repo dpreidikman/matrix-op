@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { Upload, Activity, Zap, TrendingUp, AlertTriangle } from "lucide-react";
+import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, demoData, type MatrixData } from "@/lib/matrixParser";
