@@ -4,6 +4,42 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Orbitron', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-10%); }
+  100% { transform: translateY(110%); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@keyframes grid-fade {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.12; }
+}
+
+@utility grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-cyan) 12%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-cyan) 12%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@utility text-glow {
+  text-shadow: 0 0 12px color-mix(in oklab, currentColor 60%, transparent);
+}
+
+@utility ring-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-cyan) 30%, transparent),
+    0 0 24px -4px color-mix(in oklab, var(--color-cyan) 40%, transparent);
+}
+
 /*
  * Design system definition.
  *
@@ -19,6 +55,12 @@
  */
 
 @theme inline {
+  --color-cyan: var(--cyan);
+  --color-magenta: var(--magenta);
+  --color-lime: var(--lime);
+  --color-amber: var(--amber);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
