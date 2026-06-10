@@ -61,49 +61,74 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
-  // Heurística: tomamos la primera hoja que parezca "RESUMEN" o la primera.
+  // Buscar hoja RESUMEN (la matriz consolidada por local).
   const sheetName =
-    wb.SheetNames.find((n) => /resumen|matrix|pl/i.test(n)) ?? wb.SheetNames[0];
+    wb.SheetNames.find((n) => /resumen/i.test(n)) ??
+    wb.SheetNames.find((n) => /matrix|pl/i.test(n)) ??
+    wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: null,
+    blankrows: true,
   });
 
-  // Encontrar fila de cabecera con nombres de locales.
-  let headerIdx = rows.findIndex((r) =>
-    (r ?? []).some((c) => /local|sucursal|tienda/i.test(String(c ?? "")))
-  );
-  if (headerIdx < 0) headerIdx = 0;
+  // Detectar fila de cabecera de locales: la que contenga varios nombres
+  // de local (texto en celdas alternadas) y NO "concepto"/"grupo".
+  // En el template MATRIX, los locales están en la fila 3 (index 2),
+  // columnas 4, 8, 12, ... (cada 4 columnas).
+  let headerIdx = -1;
+  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    const row = rows[r] ?? [];
+    const textCells = row.filter(
+      (c) => typeof c === "string" && c.trim().length > 1
+    );
+    if (textCells.length >= 3) {
+      const joined = textCells.map((c) => String(c).toLowerCase()).join(" ");
+      if (/(mala|cruza|costa|comedor|kona|cochinchina|milvidas|local|sucursal)/.test(joined)) {
+        headerIdx = r;
+        break;
+      }
+    }
+  }
+  if (headerIdx < 0) headerIdx = 2; // default a fila 3 del template MATRIX
 
   const header = rows[headerIdx] ?? [];
   const locales: LocalKey[] = [];
   const localCols: number[] = [];
   header.forEach((c, i) => {
     const v = String(c ?? "").trim();
-    if (i > 0 && v && !/total|concepto|grupo/i.test(v)) {
-      locales.push(v);
-      localCols.push(i);
-    }
+    if (i === 0) return;
+    if (!v) return;
+    if (/^(matrix|concepto|grupo|total|proyecci[oó]n|real|%|var)/i.test(v)) return;
+    locales.push(v);
+    localCols.push(i);
   });
 
   const pyl: PyLRow[] = [];
+  const subtotalRe =
+    /^(total|margen|utilidad|ebitda|bruto|cmv|costo laboral|gastos de|comisiones tc|honorarios|regalias|mkt|impuestos|estructura|ingresos)/i;
+
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
-    const concepto = String(row[0] ?? "").trim();
+    // El concepto puede estar en col A (0) o col B (1) según template.
+    const concepto = String(row[1] ?? row[0] ?? "").trim();
     if (!concepto) continue;
     const porLocal: Record<string, number> = {};
     let total = 0;
+    let hasValue = false;
     localCols.forEach((ci, k) => {
       const v = num(row[ci]);
       porLocal[locales[k]] = v;
       total += v;
+      if (v) hasValue = true;
     });
+    if (!hasValue && !/^(total|margen)/i.test(concepto)) continue;
     pyl.push({
       concepto,
       porLocal,
       total,
-      esSubtotal: /total|margen|utilidad|ebitda|bruto/i.test(concepto),
+      esSubtotal: subtotalRe.test(concepto),
     });
   }
 
@@ -111,9 +136,13 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const find = (re: RegExp) =>
     pyl.find((p) => re.test(normalize(p.concepto)))?.total ?? 0;
 
-  const venta = find(/venta|ingreso|revenue/);
-  const cmv = find(/cmv|costo.*mercader|food.*cost|alimento/);
-  const laboral = find(/laboral|mano.*obra|labor|sueldo/);
+  const venta =
+    find(/^total\s*ingresos/) ||
+    find(/^total\s*venta\s*neta/) ||
+    find(/venta\s*neta/) ||
+    find(/venta|ingreso|revenue/);
+  const cmv = find(/^cmv\b|costo.*mercader|food.*cost/);
+  const laboral = find(/^costo\s*laboral|mano.*obra/);
   const margen = venta ? (venta - cmv - laboral) / venta : 0;
 
   const kpis: KPI[] = [
