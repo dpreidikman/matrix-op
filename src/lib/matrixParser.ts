@@ -173,21 +173,21 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
 // Demo data para mostrar el dashboard sin archivo cargado
 export const demoData: MatrixData = {
   periodo: { mes: "OCT", anio: 2025 },
-  locales: ["Palermo", "Recoleta", "Belgrano", "Puerto Madero"],
+  locales: ["Palermo", "Recoleta", "Belgrano", "Puerto Madero", "Caballito", "Núñez", "Villa Crespo", "San Telmo", "Colegiales"],
   kpis: [
-    { label: "Venta Neta", value: 1_248_390, delta: 0.042 },
-    { label: "CMV", value: 392_000, pct: 0.314, delta: 0.021 },
-    { label: "Costo Laboral", value: 309_600, pct: 0.248, delta: -0.008 },
-    { label: "Margen Operativo", value: 226_800, pct: 0.182, delta: 0.011 },
+    { label: "Venta Neta", value: 2_613_390, delta: 0.042 },
+    { label: "CMV", value: 821_400, pct: 0.314, delta: 0.021 },
+    { label: "Costo Laboral", value: 648_200, pct: 0.248, delta: -0.008 },
+    { label: "Margen Operativo", value: 475_700, pct: 0.182, delta: 0.011 },
   ],
   pyl: [
-    { concepto: "Venta Neta", porLocal: { Palermo: 412000, Recoleta: 285000, Belgrano: 198000, "Puerto Madero": 353390 }, total: 1248390 },
-    { concepto: "CMV", porLocal: { Palermo: 133000, Recoleta: 108_500, Belgrano: 57_800, "Puerto Madero": 92_700 }, total: 392000 },
-    { concepto: "Utilidad Bruta", porLocal: { Palermo: 279000, Recoleta: 176_500, Belgrano: 140_200, "Puerto Madero": 260_690 }, total: 856390, esSubtotal: true },
-    { concepto: "Costo Laboral", porLocal: { Palermo: 91_000, Recoleta: 80_900, Belgrano: 48_500, "Puerto Madero": 89_200 }, total: 309_600 },
-    { concepto: "Servicios", porLocal: { Palermo: 18_000, Recoleta: 14_200, Belgrano: 9_800, "Puerto Madero": 16_400 }, total: 58_400 },
-    { concepto: "Alquiler", porLocal: { Palermo: 42_000, Recoleta: 28_500, Belgrano: 19_800, "Puerto Madero": 35_300 }, total: 125_600 },
-    { concepto: "Margen Operativo", porLocal: { Palermo: 128_000, Recoleta: 52_900, Belgrano: 62_100, "Puerto Madero": 119_790 }, total: 362_790, esSubtotal: true },
+    { concepto: "Venta Neta", porLocal: { Palermo: 412000, Recoleta: 285000, Belgrano: 198000, "Puerto Madero": 353390, Caballito: 221_000, "Núñez": 264_000, "Villa Crespo": 189_000, "San Telmo": 312_000, Colegiales: 379_000 }, total: 2_613_390 },
+    { concepto: "CMV", porLocal: { Palermo: 133000, Recoleta: 108_500, Belgrano: 57_800, "Puerto Madero": 92_700, Caballito: 70_200, "Núñez": 81_300, "Villa Crespo": 62_400, "San Telmo": 98_100, Colegiales: 117_400 }, total: 821_400 },
+    { concepto: "Utilidad Bruta", porLocal: { Palermo: 279000, Recoleta: 176_500, Belgrano: 140_200, "Puerto Madero": 260_690, Caballito: 150_800, "Núñez": 182_700, "Villa Crespo": 126_600, "San Telmo": 213_900, Colegiales: 261_600 }, total: 1_791_990, esSubtotal: true },
+    { concepto: "Costo Laboral", porLocal: { Palermo: 91_000, Recoleta: 80_900, Belgrano: 48_500, "Puerto Madero": 89_200, Caballito: 56_300, "Núñez": 67_100, "Villa Crespo": 52_800, "San Telmo": 78_200, Colegiales: 84_200 }, total: 648_200 },
+    { concepto: "Servicios", porLocal: { Palermo: 18_000, Recoleta: 14_200, Belgrano: 9_800, "Puerto Madero": 16_400, Caballito: 10_500, "Núñez": 12_600, "Villa Crespo": 9_100, "San Telmo": 15_200, Colegiales: 17_800 }, total: 123_600 },
+    { concepto: "Alquiler", porLocal: { Palermo: 42_000, Recoleta: 28_500, Belgrano: 19_800, "Puerto Madero": 35_300, Caballito: 22_400, "Núñez": 26_700, "Villa Crespo": 18_900, "San Telmo": 31_200, Colegiales: 37_400 }, total: 262_200 },
+    { concepto: "Margen Operativo", porLocal: { Palermo: 128_000, Recoleta: 52_900, Belgrano: 62_100, "Puerto Madero": 119_790, Caballito: 61_600, "Núñez": 76_300, "Villa Crespo": 45_800, "San Telmo": 89_300, Colegiales: 122_200 }, total: 757_990, esSubtotal: true },
   ],
   detalle: [
     { categoria: "Proteínas", local: "Palermo", proyectado: 42_000, real: 48_300, variacion: 0.15 },
