@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { Upload, Activity, Zap, TrendingUp, AlertTriangle } from "lucide-react";
+import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, demoData, type MatrixData } from "@/lib/matrixParser";
@@ -33,6 +33,7 @@ function Index() {
   const [data, setData] = useState<MatrixData>(demoData);
   const [activeLocal, setActiveLocal] = useState<string>("ALL");
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (f?: File | null) => {
@@ -74,9 +75,21 @@ function Index() {
       </div>
 
       <div className="relative flex min-h-screen">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* SIDEBAR */}
-        <aside className="fixed left-0 top-0 z-20 h-full w-64 border-r border-white/10 bg-background/70 backdrop-blur-xl p-5 flex flex-col gap-8">
-          <div>
+        <aside
+          className={`fixed left-0 top-0 z-40 h-full w-64 border-r border-white/10 bg-background/70 backdrop-blur-xl p-5 flex flex-col gap-8 transition-transform duration-300 lg:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="relative size-7 rounded-md bg-cyan/20 ring-1 ring-cyan/40 grid place-items-center">
                 <div className="size-2 rounded-full bg-cyan animate-[pulse-glow_2s_ease-in-out_infinite] shadow-[0_0_12px_var(--color-cyan)]" />
@@ -90,6 +103,12 @@ function Index() {
                 </div>
               </div>
             </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-5" />
+            </button>
           </div>
 
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
@@ -97,7 +116,7 @@ function Index() {
               Entities
             </div>
             <button
-              onClick={() => setActiveLocal("ALL")}
+              onClick={() => { setActiveLocal("ALL"); setSidebarOpen(false); }}
               className={`text-left px-3 py-2.5 rounded-md text-sm font-medium transition-all border ${
                 activeLocal === "ALL"
                   ? "bg-cyan/10 border-cyan/30 text-cyan ring-glow"
@@ -132,7 +151,7 @@ function Index() {
               return (
                 <button
                   key={l}
-                  onClick={() => setActiveLocal(l)}
+                  onClick={() => { setActiveLocal(l); setSidebarOpen(false); }}
                   className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
                     isActive
                       ? "bg-cyan/10 border-cyan/30 text-cyan"
@@ -175,16 +194,24 @@ function Index() {
         </aside>
 
         {/* MAIN */}
-        <main className="ml-64 flex-1 p-8 max-w-[1600px]">
+        <main className="flex-1 p-4 lg:ml-64 lg:p-8 max-w-[1600px]">
           {/* HEADER */}
-          <header className="flex flex-wrap items-end justify-between gap-6 mb-8 pb-6 border-b border-white/10">
+          <header className="flex flex-wrap items-end justify-between gap-4 mb-8 pb-6 border-b border-white/10">
             <div>
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.25em] text-cyan/80 mb-2">
                 <Activity className="size-3" /> Financial Control Terminal
               </div>
-              <h1 className="font-display text-3xl font-black tracking-tight text-glow">
-                {activeLocal === "ALL" ? "GRUPO · MATRIX" : activeLocal.toUpperCase()}
-              </h1>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden p-2 rounded-md border border-white/10 text-muted-foreground hover:text-cyan hover:border-cyan/40 transition-all"
+                >
+                  <Menu className="size-4" />
+                </button>
+                <h1 className="font-display text-2xl lg:text-3xl font-black tracking-tight text-glow">
+                  {activeLocal === "ALL" ? "GRUPO · MATRIX" : activeLocal.toUpperCase()}
+                </h1>
+              </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
                 Consolidated P&L · drill-down activo · refresh 14:22:01
               </p>
@@ -200,12 +227,13 @@ function Index() {
               />
               <button
                 onClick={() => inputRef.current?.click()}
-                className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-5 py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15 hover:ring-glow"
+                className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15 hover:ring-glow"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-cyan/0 via-cyan/20 to-cyan/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 <span className="relative flex items-center gap-2">
                   <Upload className="size-4" />
-                  UPLOAD_MATRIX.XLSX
+                  <span className="hidden sm:inline">UPLOAD_MATRIX.XLSX</span>
+                  <span className="sm:hidden">UPLOAD</span>
                 </span>
               </button>
             </div>
