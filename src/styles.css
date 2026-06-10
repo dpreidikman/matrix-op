@@ -105,8 +105,14 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --background: oklch(0.16 0.03 260);
+  --foreground: oklch(0.97 0.01 240);
+  --panel: oklch(0.20 0.035 260);
+  --panel-2: oklch(0.24 0.04 262);
+  --cyan: oklch(0.82 0.16 200);
+  --magenta: oklch(0.70 0.25 330);
+  --lime: oklch(0.88 0.20 135);
+  --amber: oklch(0.82 0.18 75);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
