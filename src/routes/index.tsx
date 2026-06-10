@@ -75,9 +75,21 @@ function Index() {
       </div>
 
       <div className="relative flex min-h-screen">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* SIDEBAR */}
-        <aside className="fixed left-0 top-0 z-20 h-full w-64 border-r border-white/10 bg-background/70 backdrop-blur-xl p-5 flex flex-col gap-8">
-          <div>
+        <aside
+          className={`fixed left-0 top-0 z-40 h-full w-64 border-r border-white/10 bg-background/70 backdrop-blur-xl p-5 flex flex-col gap-8 transition-transform duration-300 lg:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="relative size-7 rounded-md bg-cyan/20 ring-1 ring-cyan/40 grid place-items-center">
                 <div className="size-2 rounded-full bg-cyan animate-[pulse-glow_2s_ease-in-out_infinite] shadow-[0_0_12px_var(--color-cyan)]" />
@@ -91,6 +103,12 @@ function Index() {
                 </div>
               </div>
             </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-5" />
+            </button>
           </div>
 
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
@@ -98,7 +116,7 @@ function Index() {
               Entities
             </div>
             <button
-              onClick={() => setActiveLocal("ALL")}
+              onClick={() => { setActiveLocal("ALL"); setSidebarOpen(false); }}
               className={`text-left px-3 py-2.5 rounded-md text-sm font-medium transition-all border ${
                 activeLocal === "ALL"
                   ? "bg-cyan/10 border-cyan/30 text-cyan ring-glow"
@@ -133,7 +151,7 @@ function Index() {
               return (
                 <button
                   key={l}
-                  onClick={() => setActiveLocal(l)}
+                  onClick={() => { setActiveLocal(l); setSidebarOpen(false); }}
                   className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
                     isActive
                       ? "bg-cyan/10 border-cyan/30 text-cyan"
@@ -176,7 +194,7 @@ function Index() {
         </aside>
 
         {/* MAIN */}
-        <main className="ml-64 flex-1 p-8 max-w-[1600px]">
+        <main className="flex-1 p-4 lg:ml-64 lg:p-8 max-w-[1600px]">
           {/* HEADER */}
           <header className="flex flex-wrap items-end justify-between gap-6 mb-8 pb-6 border-b border-white/10">
             <div>
