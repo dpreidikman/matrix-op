@@ -194,7 +194,14 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
       });
   }
 
-  const periodo: Periodo = { mes: sheetName, anio: new Date().getFullYear() };
+  // El template guarda el mes en A1 de RESUMEN (ej. "Mayo").
+  const a1 = String(rows[0]?.[0] ?? "").trim();
+  const mes = a1 || sheetName;
+  // Intentar extraer año del nombre de archivo (MATRIX_MMYYYY_*.xlsx)
+  const fname = (file as File).name ?? "";
+  const yMatch = fname.match(/(\d{2})(\d{4})/);
+  const anio = yMatch ? Number(yMatch[2]) : new Date().getFullYear();
+  const periodo: Periodo = { mes, anio };
 
   return { periodo, locales, kpis, pyl, detalle };
 }
