@@ -268,7 +268,7 @@ function Index() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scrollbar-cyan">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10">
