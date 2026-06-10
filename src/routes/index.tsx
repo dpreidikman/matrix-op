@@ -346,9 +346,7 @@ function Index() {
                               if (expandable) {
                                 setCollapsed((s) => ({
                                   ...s,
-                                  [row.concepto]: !(s[row.concepto] ?? true)
-                                    ? true
-                                    : false,
+                                  [row.concepto]: !(s[row.concepto] ?? true),
                                 }));
                               }
                             }}
