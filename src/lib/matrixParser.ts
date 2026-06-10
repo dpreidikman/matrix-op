@@ -23,6 +23,7 @@ export type PyLRow = {
   porLocal: Record<LocalKey, number>;
   total: number;
   esSubtotal?: boolean;
+  esGrupo?: boolean;
 };
 
 export type DetalleRow = {
@@ -109,11 +110,17 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const subtotalRe =
     /^(total|margen|utilidad|ebitda|bruto|cmv|costo laboral|gastos de|comisiones tc|honorarios|regalias|mkt|impuestos|estructura|ingresos)/i;
 
+  // Un "grupo" es la primera fila no vacía después de una fila en blanco.
+  // Sus filas siguientes (sin blanco intermedio) se consideran hijas.
+  let prevBlank = true;
+  let currentGroup: string | undefined;
   for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
-    // El concepto puede estar en col A (0) o col B (1) según template.
     const concepto = String(row[1] ?? row[0] ?? "").trim();
-    if (!concepto) continue;
+    if (!concepto) {
+      prevBlank = true;
+      continue;
+    }
     const porLocal: Record<string, number> = {};
     let total = 0;
     let hasValue = false;
@@ -123,13 +130,21 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
       total += v;
       if (v) hasValue = true;
     });
-    if (!hasValue && !/^(total|margen)/i.test(concepto)) continue;
+    if (!hasValue && !/^(total|margen)/i.test(concepto)) {
+      prevBlank = false;
+      continue;
+    }
+    const esGrupo = prevBlank;
+    if (esGrupo) currentGroup = concepto;
     pyl.push({
       concepto,
+      grupo: esGrupo ? undefined : currentGroup,
       porLocal,
       total,
       esSubtotal: subtotalRe.test(concepto),
+      esGrupo,
     });
+    prevBlank = false;
   }
 
   // KPIs derivados
