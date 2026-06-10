@@ -194,7 +194,7 @@ function Index() {
         </aside>
 
         {/* MAIN */}
-        <main className="flex-1 p-4 lg:ml-64 lg:p-8 max-w-[1600px]">
+        <main className="flex-1 min-w-0 w-full p-4 lg:ml-64 lg:p-8 max-w-[1600px]">
           {/* HEADER */}
           <header className="flex flex-wrap items-end justify-between gap-4 mb-8 pb-6 border-b border-white/10">
             <div>
