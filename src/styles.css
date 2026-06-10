@@ -189,4 +189,25 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  /* Custom horizontal scrollbar */
+  .scrollbar-cyan::-webkit-scrollbar {
+    height: 8px;
+  }
+  .scrollbar-cyan::-webkit-scrollbar-track {
+    background: var(--panel);
+    border-radius: 4px;
+  }
+  .scrollbar-cyan::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--cyan) 50%, transparent);
+    border-radius: 4px;
+    border: 1px solid color-mix(in oklab, var(--cyan) 30%, transparent);
+  }
+  .scrollbar-cyan::-webkit-scrollbar-thumb:hover {
+    background: var(--cyan);
+  }
+  .scrollbar-cyan {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--cyan) 50%, transparent) var(--panel);
+  }
 }
