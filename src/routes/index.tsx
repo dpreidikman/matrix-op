@@ -92,38 +92,72 @@ function Index() {
             </div>
           </div>
 
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
               Entities
             </div>
             <button
               onClick={() => setActiveLocal("ALL")}
-              className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-all border ${
+              className={`text-left px-3 py-2.5 rounded-md text-sm font-medium transition-all border ${
                 activeLocal === "ALL"
                   ? "bg-cyan/10 border-cyan/30 text-cyan ring-glow"
                   : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span>Grupo · Consolidado</span>
+                <div className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
+                  <span>Grupo · Consolidado</span>
+                </div>
                 {activeLocal === "ALL" && (
                   <span className="text-[9px] font-mono text-cyan">ACTIVE</span>
                 )}
               </div>
+              <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                <span>{data.locales.length} locales</span>
+                <span>·</span>
+                <span>{fmtMoney(data.kpis.find(k => /venta/i.test(k.label))?.value ?? 0)}</span>
+              </div>
             </button>
-            {data.locales.map((l) => (
-              <button
-                key={l}
-                onClick={() => setActiveLocal(l)}
-                className={`text-left px-3 py-2 rounded-md text-sm transition-all border ${
-                  activeLocal === l
-                    ? "bg-cyan/10 border-cyan/30 text-cyan"
-                    : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
+
+            <div className="mt-2 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">
+              Locales
+            </div>
+            {data.locales.map((l) => {
+              const ventaLocal = data.pyl.find(p => /venta/i.test(p.concepto))?.porLocal[l] ?? 0;
+              const margenLocal = data.pyl.find(p => /margen/i.test(p.concepto))?.porLocal[l] ?? 0;
+              const margenPct = ventaLocal ? margenLocal / ventaLocal : 0;
+              const isActive = activeLocal === l;
+              const statusColor = margenPct >= 0.18 ? "bg-lime" : margenPct >= 0.10 ? "bg-amber" : "bg-magenta";
+              return (
+                <button
+                  key={l}
+                  onClick={() => setActiveLocal(l)}
+                  className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
+                    isActive
+                      ? "bg-cyan/10 border-cyan/30 text-cyan"
+                      : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`size-1.5 rounded-full ${statusColor} ${isActive ? "animate-pulse" : ""}`} />
+                      <span>{l}</span>
+                    </div>
+                    {isActive && (
+                      <span className="text-[9px] font-mono text-cyan">ACTIVE</span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                    <span>{fmtMoney(ventaLocal)}</span>
+                    <span>·</span>
+                    <span className={margenPct >= 0.18 ? "text-lime" : margenPct >= 0.10 ? "text-amber" : "text-magenta"}>
+                      {fmtPct(margenPct)}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </nav>
 
           <div className="mt-auto rounded-lg border border-white/10 bg-panel/60 p-3">
