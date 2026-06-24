@@ -81,9 +81,11 @@ function Index() {
       const o = oi?.porLocal[loc] ?? 0;
       const segSum = f + nf + o;
       const real = tvb?.porLocal[loc] ?? segSum;
-      const proyectado = proy?.porLocal[loc] ?? real * 1.053;
-      const variacion = real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, variacion };
+      const proyectadoRaw = proy?.porLocal[loc];
+      const proyectado = proyectadoRaw ?? 0;
+      const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
+      const variacion = hasProy && real ? (real - proyectado) / real : 0;
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion };
     });
     return { rows };
   }, [data, activeLocal]);
@@ -469,13 +471,14 @@ function Index() {
                   const oPct = (r.o / denom) * 100;
                   const positive = r.variacion >= 0;
                   return (
-                    <div key={i} className="flex items-center gap-6 flex-wrap lg:flex-nowrap mb-5 last:mb-0">
-                      <div className="w-28 shrink-0 text-xs font-mono uppercase tracking-wider text-foreground truncate">
+                    <div key={i} className="mb-6 last:mb-0">
+                      <div className="text-xs font-mono uppercase tracking-[0.2em] text-foreground mb-1.5">
                         {r.local}
                       </div>
-                      {/* Stacked bar */}
-                      <div className="flex-1 min-w-[240px]">
-                        <div className="relative h-10 rounded-md bg-white/5 ring-1 ring-white/10 overflow-hidden flex">
+                      <div className="flex items-center gap-6 flex-wrap lg:flex-nowrap">
+                        {/* Stacked bar */}
+                        <div className="flex-1 min-w-[240px]">
+                          <div className="relative h-6 rounded bg-white/5 ring-1 ring-white/10 overflow-hidden flex">
                           {r.f > 0 && (
                             <div
                               title={`Venta F: ${fmtMoney(r.f)}`}
@@ -503,23 +506,24 @@ function Index() {
                               {oPct > 10 ? fmtMoney(r.o) : ""}
                             </div>
                           )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* KPIs a la derecha */}
-                      <div className="flex gap-5 shrink-0">
-                        <div className="text-right">
-                          <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Total Venta Bruta</div>
-                          <div className="font-display text-lg font-bold text-cyan text-glow tabular-nums">{fmtMoney(r.real)}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Proyectado</div>
-                          <div className="font-display text-lg font-bold text-magenta tabular-nums">{fmtMoney(r.proyectado)}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Variación</div>
-                          <div className={`font-display text-lg font-bold tabular-nums ${positive ? "text-lime" : "text-magenta"}`}>
-                            {r.variacion >= 0 ? "+" : ""}{fmtPct(r.variacion)}
+                        {/* KPIs a la derecha (ancho fijo para barras iguales) */}
+                        <div className="grid grid-cols-3 gap-5 shrink-0 w-[360px]">
+                          <div className="text-right">
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Total Venta Bruta</div>
+                            <div className="font-display text-base font-bold text-foreground tabular-nums">{fmtMoney(r.real)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Proyectado</div>
+                            <div className="font-display text-base font-bold text-muted-foreground tabular-nums">{r.hasProy ? fmtMoney(r.proyectado) : "—"}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Variación</div>
+                            <div className={`font-display text-base font-bold tabular-nums ${!r.hasProy ? "text-muted-foreground" : positive ? "text-lime" : "text-magenta"}`}>
+                              {!r.hasProy ? "—" : `${r.variacion >= 0 ? "+" : ""}${fmtPct(r.variacion)}`}
+                            </div>
                           </div>
                         </div>
                       </div>
