@@ -65,6 +65,27 @@ function Index() {
 
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
+  // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
+  const ventaBruta = useMemo(() => {
+    const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
+    const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
+    const oi = data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto));
+    const proy = data.pyl.find((p) =>
+      /(venta.*proyect|proyecci[oó]n.*venta|total.*proyect)/i.test(p.concepto)
+    );
+    const rows = (activeLocal === "ALL" ? data.locales : [activeLocal]).map((loc) => {
+      const f = vf?.porLocal[loc] ?? 0;
+      const nf = vnf?.porLocal[loc] ?? 0;
+      const o = oi?.porLocal[loc] ?? 0;
+      const real = f + nf + o;
+      const proyectado = proy?.porLocal[loc] ?? real * 1.053;
+      const variacion = real ? (proyectado - real) / real : 0;
+      return { local: loc, f, nf, o, real, proyectado, variacion };
+    });
+    const max = Math.max(...rows.map((r) => Math.max(r.real, r.proyectado)), 1);
+    return { rows, max };
+  }, [data, activeLocal]);
+
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
       {/* Ambient grid + glow */}
@@ -428,59 +449,64 @@ function Index() {
                     Drill-Down · Proyección vs Real
                   </div>
                   <h3 className="font-display text-xl font-bold tracking-wide mt-1">
-                    {selectedConcept || "—"}
+                    Total Venta Bruta
                   </h3>
                 </div>
-                <div className="flex gap-2 text-[10px] font-mono">
-                  <span className="px-2 py-1 rounded bg-cyan/10 text-cyan">REAL</span>
-                  <span className="px-2 py-1 rounded bg-white/5 text-muted-foreground">PROYECTADO</span>
+                <div className="flex gap-3 text-[10px] font-mono">
+                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-cyan" /><span className="text-muted-foreground">VENTA F</span></span>
+                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-magenta" /><span className="text-muted-foreground">VENTA NF</span></span>
+                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-lime" /><span className="text-muted-foreground">OTROS ING.</span></span>
                 </div>
               </div>
 
               <div className="space-y-4">
-                {filteredDetail.slice(0, 8).map((d, i) => {
-                  const projPct = d.proyectado / Math.max(d.real, d.proyectado, 1);
-                  const realPct = d.real / Math.max(d.real, d.proyectado, 1);
-                  const over = d.variacion > 0.05;
+                {ventaBruta.rows.map((r, i) => {
+                  const totalPct = (r.real / ventaBruta.max) * 100;
+                  const fPct = r.real ? (r.f / r.real) * totalPct : 0;
+                  const nfPct = r.real ? (r.nf / r.real) * totalPct : 0;
+                  const oPct = r.real ? (r.o / r.real) * totalPct : 0;
+                  const over = r.variacion > 0.05;
+                  const under = r.variacion < -0.05;
                   return (
                     <div key={i}>
-                      <div className="flex justify-between text-xs font-mono mb-1.5">
-                        <span className="text-foreground">
-                          {d.categoria} <span className="text-muted-foreground">· {d.local}</span>
+                      <div className="flex justify-between text-xs font-mono mb-1.5 gap-3">
+                        <span className="text-foreground truncate">
+                          <span className="text-muted-foreground">VENTA BRUTA · </span>
+                          {r.local}
                         </span>
-                        <span className="flex gap-3 tabular-nums">
-                          <span className="text-muted-foreground">{fmtMoney(d.proyectado)}</span>
-                          <span className={over ? "text-magenta" : "text-cyan"}>
-                            {fmtMoney(d.real)}
-                          </span>
+                        <span className="flex gap-3 tabular-nums shrink-0">
+                          <span className="text-cyan">{fmtMoney(r.real)}</span>
+                          <span className="text-magenta">{fmtMoney(r.proyectado)}</span>
                           <span
                             className={`w-14 text-right ${
-                              over ? "text-magenta" : d.variacion < -0.05 ? "text-lime" : "text-muted-foreground"
+                              over ? "text-magenta" : under ? "text-lime" : "text-muted-foreground"
                             }`}
                           >
-                            {d.variacion >= 0 ? "+" : ""}
-                            {fmtPct(d.variacion)}
+                            {r.variacion >= 0 ? "+" : ""}
+                            {fmtPct(r.variacion)}
                           </span>
                         </span>
                       </div>
-                      <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
+                      <div className="relative h-2.5 rounded-full bg-white/5 overflow-hidden flex">
                         <div
-                          className="absolute inset-y-0 left-0 bg-white/15"
-                          style={{ width: `${projPct * 100}%` }}
+                          className="h-full bg-cyan shadow-[0_0_10px_var(--color-cyan)]"
+                          style={{ width: `${fPct}%` }}
                         />
                         <div
-                          className={`absolute inset-y-0 left-0 ${
-                            over ? "bg-magenta shadow-[0_0_10px_var(--color-magenta)]" : "bg-cyan shadow-[0_0_10px_var(--color-cyan)]"
-                          }`}
-                          style={{ width: `${realPct * 100}%`, mixBlendMode: "screen" }}
+                          className="h-full bg-magenta shadow-[0_0_10px_var(--color-magenta)]"
+                          style={{ width: `${nfPct}%` }}
+                        />
+                        <div
+                          className="h-full bg-lime shadow-[0_0_10px_var(--color-lime)]"
+                          style={{ width: `${oPct}%` }}
                         />
                       </div>
                     </div>
                   );
                 })}
-                {filteredDetail.length === 0 && (
+                {ventaBruta.rows.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground text-sm font-mono">
-                    Sin datos de detalle para este concepto.
+                    Sin datos de venta bruta.
                   </div>
                 )}
               </div>
