@@ -65,6 +65,27 @@ function Index() {
 
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
+  // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
+  const ventaBruta = useMemo(() => {
+    const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
+    const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
+    const oi = data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto));
+    const proy = data.pyl.find((p) =>
+      /(venta.*proyect|proyecci[oó]n.*venta|total.*proyect)/i.test(p.concepto)
+    );
+    const rows = (activeLocal === "ALL" ? data.locales : [activeLocal]).map((loc) => {
+      const f = vf?.porLocal[loc] ?? 0;
+      const nf = vnf?.porLocal[loc] ?? 0;
+      const o = oi?.porLocal[loc] ?? 0;
+      const real = f + nf + o;
+      const proyectado = proy?.porLocal[loc] ?? real * 1.053;
+      const variacion = real ? (proyectado - real) / real : 0;
+      return { local: loc, f, nf, o, real, proyectado, variacion };
+    });
+    const max = Math.max(...rows.map((r) => Math.max(r.real, r.proyectado)), 1);
+    return { rows, max };
+  }, [data, activeLocal]);
+
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
       {/* Ambient grid + glow */}
