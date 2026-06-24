@@ -81,9 +81,11 @@ function Index() {
       const o = oi?.porLocal[loc] ?? 0;
       const segSum = f + nf + o;
       const real = tvb?.porLocal[loc] ?? segSum;
-      const proyectado = proy?.porLocal[loc] ?? real * 1.053;
-      const variacion = real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, variacion };
+      const proyectadoRaw = proy?.porLocal[loc];
+      const proyectado = proyectadoRaw ?? 0;
+      const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
+      const variacion = hasProy && real ? (real - proyectado) / real : 0;
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion };
     });
     return { rows };
   }, [data, activeLocal]);
