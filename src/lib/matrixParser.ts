@@ -230,7 +230,6 @@ export const demoData: MatrixData = {
     "CRUZA POLO",
     "CRUZA RECOLETA",
     "MILVIDAS",
-    "MILVIDAS DIARIO",
     "COSTA RESTO",
     "COSTA CLUB",
     "COMEDOR",
