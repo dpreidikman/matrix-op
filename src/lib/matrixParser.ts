@@ -102,6 +102,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
     if (i === 0) return;
     if (!v) return;
     if (/^(matrix|concepto|grupo|total|proyecci[oó]n|real|%|var)/i.test(v)) return;
+    if (/milvidas\s*diario/i.test(v)) return;
     locales.push(v);
     localCols.push(i);
   });
