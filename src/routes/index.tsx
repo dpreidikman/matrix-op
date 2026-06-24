@@ -451,7 +451,7 @@ function Index() {
                     Drill-Down · Proyección vs Real
                   </div>
                   <h3 className="font-display text-xl font-bold tracking-wide mt-1">
-                    VENTA BRUTA · <span className="text-cyan text-glow">{ventaBruta.rows[0]?.local ?? "—"}</span>
+                    Venta Bruta por Local
                   </h3>
                 </div>
                 <div className="flex gap-3 text-[10px] font-mono">
