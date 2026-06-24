@@ -74,8 +74,7 @@ function Index() {
       /(venta.*proyect|proyecci[oó]n.*venta|total.*proyect)/i.test(p.concepto)
     );
     const tvb = data.pyl.find((p) => /total\s*venta\s*bruta/i.test(p.concepto));
-    const focus = activeLocal === "ALL" ? data.locales[0] : activeLocal;
-    const localesToShow = focus ? [focus] : [];
+    const localesToShow = activeLocal === "ALL" ? data.locales : [activeLocal];
     const rows = localesToShow.map((loc) => {
       const f = vf?.porLocal[loc] ?? 0;
       const nf = vnf?.porLocal[loc] ?? 0;
@@ -452,7 +451,7 @@ function Index() {
                     Drill-Down · Proyección vs Real
                   </div>
                   <h3 className="font-display text-xl font-bold tracking-wide mt-1">
-                    VENTA BRUTA · <span className="text-cyan text-glow">{ventaBruta.rows[0]?.local ?? "—"}</span>
+                    Venta Bruta por Local
                   </h3>
                 </div>
                 <div className="flex gap-3 text-[10px] font-mono">
@@ -471,7 +470,10 @@ function Index() {
                   const over = r.variacion > 0.05;
                   const under = r.variacion < -0.05;
                   return (
-                    <div key={i} className="flex items-center gap-6 flex-wrap lg:flex-nowrap">
+                    <div key={i} className="flex items-center gap-6 flex-wrap lg:flex-nowrap mb-5 last:mb-0">
+                      <div className="w-28 shrink-0 text-xs font-mono uppercase tracking-wider text-foreground truncate">
+                        {r.local}
+                      </div>
                       {/* Stacked bar */}
                       <div className="flex-1 min-w-[240px]">
                         <div className="relative h-9 rounded-md bg-white/5 ring-1 ring-white/10 overflow-hidden flex">
