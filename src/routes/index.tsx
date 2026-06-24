@@ -70,9 +70,10 @@ function Index() {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
     const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
     const oi = data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto));
-    const proy = data.pyl.find((p) =>
-      /(venta.*proyect|proyecci[oó]n.*venta|total.*proyect)/i.test(p.concepto)
-    );
+    const proy =
+      data.pyl.find((p) => /total.*venta.*proyect/i.test(p.concepto)) ??
+      data.pyl.find((p) => /venta.*proyect/i.test(p.concepto)) ??
+      data.pyl.find((p) => /proyect/i.test(p.concepto));
     const tvb = data.pyl.find((p) => /total\s*venta\s*bruta/i.test(p.concepto));
     const localesToShow = activeLocal === "ALL" ? data.locales : [activeLocal];
     const rows = localesToShow.map((loc) => {
@@ -510,17 +511,17 @@ function Index() {
                         </div>
 
                         {/* KPIs a la derecha (ancho fijo para barras iguales) */}
-                        <div className="grid grid-cols-3 gap-5 shrink-0 w-[360px]">
+                        <div className="grid grid-cols-3 gap-5 shrink-0 w-[460px]">
                           <div className="text-right">
-                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Total Venta Bruta</div>
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Total Venta Bruta</div>
                             <div className="font-display text-base font-bold text-foreground tabular-nums">{fmtMoney(r.real)}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Proyectado</div>
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Proyectado</div>
                             <div className="font-display text-base font-bold text-muted-foreground tabular-nums">{r.hasProy ? fmtMoney(r.proyectado) : "—"}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground">Variación</div>
+                            <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Variación</div>
                             <div className={`font-display text-base font-bold tabular-nums ${!r.hasProy ? "text-muted-foreground" : positive ? "text-lime" : "text-magenta"}`}>
                               {!r.hasProy ? "—" : `${r.variacion >= 0 ? "+" : ""}${fmtPct(r.variacion)}`}
                             </div>
