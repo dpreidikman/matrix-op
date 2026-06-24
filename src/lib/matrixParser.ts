@@ -40,6 +40,7 @@ export type MatrixData = {
   kpis: KPI[];
   pyl: PyLRow[];
   detalle: DetalleRow[];
+  proyecciones?: Record<LocalKey, number>;
 };
 
 const num = (v: unknown): number => {
@@ -219,7 +220,37 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const anio = yMatch ? Number(yMatch[2]) : new Date().getFullYear();
   const periodo: Periodo = { mes, anio };
 
-  return { periodo, locales, kpis, pyl, detalle };
+  // Proyección de TOTAL VENTA BRUTA por local (hoja VENTAS)
+  const proyecciones: Record<LocalKey, number> = {};
+  const ventasSheetName = wb.SheetNames.find((n) => /^ventas?$/i.test(n));
+  if (ventasSheetName) {
+    const vRows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[ventasSheetName], {
+      header: 1,
+      defval: null,
+      blankrows: true,
+    });
+    const vHeader = vRows[0] ?? [];
+    // Mapear columna de proyección por local: header está en cols 4,6,8,...
+    const localCol: Record<string, number> = {};
+    vHeader.forEach((c, i) => {
+      const v = String(c ?? "").trim();
+      if (!v || i < 3) return;
+      if (/^mayo|^enero|^febrero|^marzo|^abril|^junio|^julio|^agosto|^septiembre|^octubre|^noviembre|^diciembre/i.test(v)) return;
+      localCol[v.toUpperCase()] = i;
+    });
+    const bruta = vRows.find((r) => /total\s*venta\s*bruta/i.test(String(r?.[0] ?? "")));
+    if (bruta) {
+      for (const loc of locales) {
+        const ci = localCol[loc.toUpperCase()];
+        if (ci !== undefined) {
+          const proy = num(bruta[ci]);
+          if (proy) proyecciones[loc] = proy;
+        }
+      }
+    }
+  }
+
+  return { periodo, locales, kpis, pyl, detalle, proyecciones };
 }
 
 // Demo data para mostrar el dashboard sin archivo cargado

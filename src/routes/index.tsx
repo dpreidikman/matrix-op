@@ -74,6 +74,7 @@ function Index() {
       data.pyl.find((p) => /total.*venta.*proyect/i.test(p.concepto)) ??
       data.pyl.find((p) => /venta.*proyect/i.test(p.concepto)) ??
       data.pyl.find((p) => /proyect/i.test(p.concepto));
+    const proyMap = data.proyecciones ?? {};
     const tvb = data.pyl.find((p) => /total\s*venta\s*bruta/i.test(p.concepto));
     const localesToShow = activeLocal === "ALL" ? data.locales : [activeLocal];
     const rows = localesToShow.map((loc) => {
@@ -82,7 +83,7 @@ function Index() {
       const o = oi?.porLocal[loc] ?? 0;
       const segSum = f + nf + o;
       const real = tvb?.porLocal[loc] ?? segSum;
-      const proyectadoRaw = proy?.porLocal[loc];
+      const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
       const variacion = hasProy && real ? (real - proyectado) / real : 0;
