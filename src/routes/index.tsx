@@ -74,8 +74,7 @@ function Index() {
       /(venta.*proyect|proyecci[oó]n.*venta|total.*proyect)/i.test(p.concepto)
     );
     const tvb = data.pyl.find((p) => /total\s*venta\s*bruta/i.test(p.concepto));
-    const focus = activeLocal === "ALL" ? data.locales[0] : activeLocal;
-    const localesToShow = focus ? [focus] : [];
+    const localesToShow = activeLocal === "ALL" ? data.locales : [activeLocal];
     const rows = localesToShow.map((loc) => {
       const f = vf?.porLocal[loc] ?? 0;
       const nf = vnf?.porLocal[loc] ?? 0;
