@@ -59,6 +59,11 @@ const normalize = (s: unknown) =>
     .trim()
     .toLowerCase();
 
+const localKey = (s: unknown) =>
+  normalize(s)
+    .replace(/costa\s*gral/g, "costa7070")
+    .replace(/[^a-z0-9]/g, "");
+
 export async function parseMatrix(file: File): Promise<MatrixData> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
@@ -230,18 +235,24 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
       blankrows: true,
     });
     const vHeader = vRows[0] ?? [];
-    // Mapear columna de proyección por local: header está en cols 4,6,8,...
+    const subHeader = vRows.find((r) =>
+      (r ?? []).some((c) => /proyecci[oó]n/i.test(String(c ?? "")))
+    );
+    // Mapear columna de proyección por local: en VENTAS cada local tiene
+    // columnas Proyección/Real y luego los nombres se repiten en el bloque de variación.
     const localCol: Record<string, number> = {};
     vHeader.forEach((c, i) => {
       const v = String(c ?? "").trim();
       if (!v || i < 3) return;
       if (/^mayo|^enero|^febrero|^marzo|^abril|^junio|^julio|^agosto|^septiembre|^octubre|^noviembre|^diciembre/i.test(v)) return;
-      localCol[v.toUpperCase()] = i;
+      if (subHeader && !/proyecci[oó]n/i.test(String(subHeader[i] ?? ""))) return;
+      const key = localKey(v);
+      if (!localCol[key]) localCol[key] = i;
     });
     const bruta = vRows.find((r) => /total\s*venta\s*bruta/i.test(String(r?.[0] ?? "")));
     if (bruta) {
       for (const loc of locales) {
-        const ci = localCol[loc.toUpperCase()];
+        const ci = localCol[localKey(loc)];
         if (ci !== undefined) {
           const proy = num(bruta[ci]);
           if (proy) proyecciones[loc] = proy;
