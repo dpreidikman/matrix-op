@@ -172,6 +172,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const laboral = find(/^costo\s*laboral|mano.*obra/);
   const margen = venta ? (venta - cmv - laboral) / venta : 0;
 
+  // Placeholder; deltas se completan más abajo, cuando ya leímos las proyecciones.
   const kpis: KPI[] = [
     { label: "Venta Neta", value: venta },
     { label: "CMV", value: cmv, pct: venta ? cmv / venta : 0 },
