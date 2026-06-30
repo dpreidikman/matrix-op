@@ -172,6 +172,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const laboral = find(/^costo\s*laboral|mano.*obra/);
   const margen = venta ? (venta - cmv - laboral) / venta : 0;
 
+  // Placeholder; deltas se completan más abajo, cuando ya leímos las proyecciones.
   const kpis: KPI[] = [
     { label: "Venta Neta", value: venta },
     { label: "CMV", value: cmv, pct: venta ? cmv / venta : 0 },
@@ -264,6 +265,14 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
         }
       }
     }
+  }
+
+  // Delta Venta Neta vs proyección total (suma de locales no excluidos del total)
+  const proyTotal = Object.entries(proyecciones)
+    .filter(([loc]) => !excludedSet.has(loc))
+    .reduce((a, [, v]) => a + v, 0);
+  if (proyTotal && venta) {
+    kpis[0].delta = (venta - proyTotal) / venta;
   }
 
   return { periodo, locales, kpis, pyl, detalle, proyecciones, excluidosDeTotal };
