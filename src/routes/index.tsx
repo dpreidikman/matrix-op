@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -36,6 +36,11 @@ function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleFile = async (f?: File | null) => {
     if (!f) return;
@@ -279,7 +284,7 @@ function Index() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
-                Consolidated P&L · drill-down activo · refresh 14:22:01
+                Consolidated P&L · drill-down activo · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
               </p>
             </div>
 
