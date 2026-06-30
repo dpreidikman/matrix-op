@@ -41,6 +41,7 @@ export type MatrixData = {
   pyl: PyLRow[];
   detalle: DetalleRow[];
   proyecciones?: Record<LocalKey, number>;
+  excluidosDeTotal?: LocalKey[];
 };
 
 const num = (v: unknown): number => {
@@ -113,6 +114,10 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
     localCols.push(i);
   });
 
+  // Locales que NO suman al total (son agregaciones de otros, ej. COSTA GRAL = COSTA RESTO + COSTA CLUB)
+  const excluidosDeTotal: LocalKey[] = locales.filter((l) => /costa\s*gral/i.test(l));
+  const excludedSet = new Set(excluidosDeTotal);
+
   const pyl: PyLRow[] = [];
   const subtotalRe =
     /^(total|margen|utilidad|ebitda|bruto|cmv|costo laboral|gastos de|comisiones tc|honorarios|regalias|mkt|impuestos|estructura|ingresos)/i;
@@ -134,7 +139,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
     localCols.forEach((ci, k) => {
       const v = num(row[ci]);
       porLocal[locales[k]] = v;
-      total += v;
+      if (!excludedSet.has(locales[k])) total += v;
       if (v) hasValue = true;
     });
     if (!hasValue && !/^(total|margen)/i.test(concepto)) {
@@ -261,7 +266,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
     }
   }
 
-  return { periodo, locales, kpis, pyl, detalle, proyecciones };
+  return { periodo, locales, kpis, pyl, detalle, proyecciones, excluidosDeTotal };
 }
 
 // Demo data para mostrar el dashboard sin archivo cargado

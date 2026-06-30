@@ -51,7 +51,11 @@ function Index() {
     }
   };
 
-  const localesView = activeLocal === "ALL" ? data.locales : [activeLocal];
+  const excludedSet = new Set(data.excluidosDeTotal ?? []);
+  const localesView =
+    activeLocal === "ALL"
+      ? data.locales.filter((l) => !excludedSet.has(l))
+      : [activeLocal];
 
   // KPIs dinámicos según el local seleccionado
   const kpisView = useMemo<typeof data.kpis>(() => {
@@ -107,7 +111,10 @@ function Index() {
       data.pyl.find((p) => /proyect/i.test(p.concepto));
     const proyMap = data.proyecciones ?? {};
     const tvb = data.pyl.find((p) => /total\s*venta\s*bruta/i.test(p.concepto));
-    const localesToShow = activeLocal === "ALL" ? data.locales : [activeLocal];
+    const localesToShow =
+      activeLocal === "ALL"
+        ? data.locales.filter((l) => !excludedSet.has(l))
+        : [activeLocal];
     const rows = localesToShow.map((loc) => {
       const f = vf?.porLocal[loc] ?? 0;
       const nf = vnf?.porLocal[loc] ?? 0;
