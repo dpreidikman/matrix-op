@@ -36,6 +36,11 @@ function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(() => new Date());
+  useMemo(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleFile = async (f?: File | null) => {
     if (!f) return;
