@@ -53,6 +53,37 @@ function Index() {
 
   const localesView = activeLocal === "ALL" ? data.locales : [activeLocal];
 
+  // KPIs dinámicos según el local seleccionado
+  const kpisView = useMemo<typeof data.kpis>(() => {
+    if (activeLocal === "ALL") return data.kpis;
+    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const findRow = (re: RegExp) =>
+      data.pyl.find((p) => re.test(norm(p.concepto)));
+    const valOf = (re: RegExp) => {
+      const r = findRow(re);
+      return r?.porLocal[activeLocal] ?? 0;
+    };
+    const venta =
+      valOf(/^total\s*ingresos/) ||
+      valOf(/^total\s*venta\s*neta/) ||
+      valOf(/venta\s*neta/) ||
+      valOf(/^venta\s*bruta/) ||
+      valOf(/venta|ingreso/);
+    const cmv = valOf(/^cmv\b|costo.*mercader|food.*cost/);
+    const laboral = valOf(/^costo\s*laboral|mano.*obra/);
+    const margenVal = venta - cmv - laboral;
+    const margenPct = venta ? margenVal / venta : 0;
+    const proyVenta = data.proyecciones?.[activeLocal];
+    const deltaVenta =
+      proyVenta && venta ? (venta - proyVenta) / venta : undefined;
+    return [
+      { label: "Venta Neta", value: venta, delta: deltaVenta },
+      { label: "CMV", value: cmv, pct: venta ? cmv / venta : 0 },
+      { label: "Costo Laboral", value: laboral, pct: venta ? laboral / venta : 0 },
+      { label: "Margen Operativo", value: margenVal, pct: margenPct },
+    ];
+  }, [data, activeLocal]);
+
   const filteredDetail = useMemo(
     () =>
       data.detalle.filter(
@@ -269,7 +300,7 @@ function Index() {
 
           {/* KPI GRID */}
           <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {data.kpis.map((k, i) => {
+            {kpisView.map((k, i) => {
               const accent = ["cyan", "amber", "magenta", "lime"][i % 4];
               const accentClass: Record<string, string> = {
                 cyan: "text-cyan",
