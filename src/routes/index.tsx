@@ -275,7 +275,7 @@ function Index() {
                   <Menu className="size-4" />
                 </button>
                 <h1 className="font-display text-2xl lg:text-3xl font-black tracking-tight text-glow">
-                  {activeLocal === "ALL" ? "GRUPO · MATRIX" : activeLocal.toUpperCase()}
+                  {activeLocal === "ALL" ? "MATRIX" : activeLocal.toUpperCase()}
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
