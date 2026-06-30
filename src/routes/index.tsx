@@ -284,7 +284,7 @@ function Index() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
-                Consolidated P&L · drill-down activo · refresh 14:22:01
+                Consolidated P&L · drill-down activo · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
               </p>
             </div>
 
