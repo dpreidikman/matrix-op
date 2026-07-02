@@ -42,6 +42,22 @@ export type MatrixData = {
   detalle: DetalleRow[];
   proyecciones?: Record<LocalKey, number>;
   excluidosDeTotal?: LocalKey[];
+  gastos?: GastoRow[];
+  origen?: "matrix" | "gastos";
+};
+
+export type GastoRow = {
+  local: LocalKey;
+  fechaPago: string; // ISO yyyy-mm-dd
+  fecha?: string;
+  concepto: string;
+  imputacion: string;
+  grupo: string;
+  monto: number;
+  semana?: string;
+  mes?: string;
+  formaPago?: string;
+  alias?: string;
 };
 
 const num = (v: unknown): number => {
