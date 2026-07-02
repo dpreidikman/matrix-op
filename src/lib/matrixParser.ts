@@ -660,6 +660,57 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
   };
 }
 
+// Re-agrega gastos filtrados por rango de fecha (fechaPago), devolviendo un
+// MatrixData con el pyl reconstruido sobre el esqueleto oficial.
+export function filterMatrixByPeriod(
+  base: MatrixData,
+  from?: string,
+  to?: string,
+): MatrixData {
+  if (!base.gastos?.length) return base;
+  const f = from ? new Date(from).getTime() : -Infinity;
+  const t = to ? new Date(to).getTime() + 86400000 - 1 : Infinity;
+  const gastos = base.gastos.filter((g) => {
+    const ts = g.fechaPago ? new Date(g.fechaPago).getTime() : NaN;
+    if (!isFinite(ts)) return true;
+    return ts >= f && ts <= t;
+  });
+  const locales = base.locales;
+  const excluded = new Set(base.excluidosDeTotal ?? []);
+  const emptyPorLocal = (): Record<string, number> =>
+    Object.fromEntries(locales.map((l) => [l, 0]));
+  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const g of gastos) {
+    const key = g.grupo;
+    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
+    const acc = perConcepto.get(key)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
+  }
+  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const it of MATRIX_SKELETON) {
+    if (!it.parent) continue;
+    const acc = perConcepto.get(it.concepto);
+    if (!acc) continue;
+    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
+    const p = parentAgg.get(it.parent)!;
+    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
+    p.total += acc.total;
+  }
+  const pyl: PyLRow[] = MATRIX_SKELETON.map((it) => {
+    const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
+    return {
+      concepto: it.concepto,
+      grupo: it.parent ?? undefined,
+      porLocal: data?.porLocal ?? emptyPorLocal(),
+      total: data?.total ?? 0,
+      esGrupo: it.esGrupo,
+      esSubtotal: it.esSubtotal,
+    };
+  });
+  return { ...base, pyl, gastos };
+}
+
 // Demo data para mostrar el dashboard sin archivo cargado
 export const demoData: MatrixData = {
   origen: "matrix",
