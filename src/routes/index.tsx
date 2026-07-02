@@ -6,16 +6,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 
 const STORAGE_KEYS = {
-  matrix: "matrix:v1:matrix",
-  gastos: "matrix:v1:gastos",
+  auto: "matrix:v1:auto",
+  detallado: "matrix:v1:detallado",
   name: "matrix:v1:filename",
 } as const;
 
 function loadPersisted(): { data: MatrixData; name: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const rawM = localStorage.getItem(STORAGE_KEYS.matrix);
-    const rawG = localStorage.getItem(STORAGE_KEYS.gastos);
+    const rawM = localStorage.getItem(STORAGE_KEYS.auto);
+    const rawG = localStorage.getItem(STORAGE_KEYS.detallado);
     const name = localStorage.getItem(STORAGE_KEYS.name) ?? "";
     const m = rawM ? (JSON.parse(rawM) as MatrixData) : null;
     const g = rawG ? (JSON.parse(rawG) as MatrixData) : null;
@@ -126,15 +126,16 @@ function Index() {
       // Persistir en el slot correspondiente y mergear con el otro slot si existe
       let combined: MatrixData = parsed;
       try {
-        const slot = parsed.origen === "gastos" ? STORAGE_KEYS.gastos : STORAGE_KEYS.matrix;
-        const otherSlot = parsed.origen === "gastos" ? STORAGE_KEYS.matrix : STORAGE_KEYS.gastos;
+        const slot = kind === "detallado" ? STORAGE_KEYS.detallado : STORAGE_KEYS.auto;
+        const otherSlot = kind === "detallado" ? STORAGE_KEYS.auto : STORAGE_KEYS.detallado;
         localStorage.setItem(slot, JSON.stringify(parsed));
         localStorage.setItem(STORAGE_KEYS.name, f.name);
         const otherRaw = localStorage.getItem(otherSlot);
         if (otherRaw) {
           const other = JSON.parse(otherRaw) as MatrixData;
+          // Base = MATRIX/semanales (kind auto), overlay = gastos detallados
           combined =
-            parsed.origen === "gastos"
+            kind === "detallado"
               ? mergeMatrixData(other, parsed)
               : mergeMatrixData(parsed, other);
         }

@@ -782,7 +782,6 @@ function mapCatSubToConcept(cat: string, sub: string | null | undefined): { conc
 
   // Honorarios
   if (/honorario/.test(c)) {
-    if (!s) return { concepto: "HONORARIOS S/CAT", parent: "SIN CATEGORIA" };
     return { concepto: "TOTAL HONORARIOS" };
   }
 
