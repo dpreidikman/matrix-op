@@ -54,6 +54,33 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
+  // Meses disponibles según fechas de pago del archivo cargado
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of rawData.gastos ?? []) {
+      if (g.fechaPago && /^\d{4}-\d{2}/.test(g.fechaPago)) set.add(g.fechaPago.slice(0, 7));
+    }
+    return [...set].sort();
+  }, [rawData.gastos]);
+
+  const monthRange = (ym: string): [string, string] => {
+    const [y, m] = ym.split("-").map(Number);
+    const first = `${ym}-01`;
+    const last = new Date(y, m, 0).getDate();
+    return [first, `${ym}-${String(last).padStart(2, "0")}`];
+  };
+
+  const selectedMonth =
+    periodFrom && periodTo && periodFrom.slice(0, 7) === periodTo.slice(0, 7)
+      ? periodFrom.slice(0, 7)
+      : "";
+
+  const MES_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return `${MES_LABELS[m - 1]} ${y}`;
+  };
+
   const handleFile = async (f?: File | null) => {
     if (!f) return;
     try {
@@ -84,6 +111,7 @@ function Index() {
   };
 
   const isGastos = data.origen === "gastos";
+  const hasGastos = !!data.gastos?.length;
   const excludedSet = new Set(data.excluidosDeTotal ?? []);
   const localesView =
     activeLocal === "ALL"
@@ -92,26 +120,31 @@ function Index() {
 
   // KPIs dinámicos según el local seleccionado
   const kpisView = useMemo<typeof data.kpis>(() => {
-    if (activeLocal === "ALL") return data.kpis;
     const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const findRow = (re: RegExp) =>
       data.pyl.find((p) => re.test(norm(p.concepto)));
     const valOf = (re: RegExp) => {
       const r = findRow(re);
-      return r?.porLocal[activeLocal] ?? 0;
+      if (!r) return 0;
+      if (activeLocal === "ALL") return r.total ?? 0;
+      return r.porLocal[activeLocal] ?? 0;
     };
-    if (data.origen === "gastos") {
+    if (hasGastos) {
       const total = valOf(/^total\s*gastos$/);
       const dj = valOf(/dj\s*y\s*bandas/);
       const pr = valOf(/^total\s*pr$/);
       const bailarinas = valOf(/bailarinas/);
+      const totalFromPyl = total || data.pyl
+        .filter((p) => p.esGrupo && p.concepto !== "TOTAL GASTOS")
+        .reduce((s, p) => s + (activeLocal === "ALL" ? p.total : p.porLocal[activeLocal] ?? 0), 0);
       return [
-        { label: "Total Gastos", value: total },
-        { label: "DJ y Bandas", value: dj, pct: total ? dj / total : 0 },
-        { label: "PR", value: pr, pct: total ? pr / total : 0 },
-        { label: "Bailarinas", value: bailarinas, pct: total ? bailarinas / total : 0 },
+        { label: "Total Gastos", value: totalFromPyl },
+        { label: "DJ y Bandas", value: dj, pct: totalFromPyl ? dj / totalFromPyl : 0 },
+        { label: "PR", value: pr, pct: totalFromPyl ? pr / totalFromPyl : 0 },
+        { label: "Bailarinas", value: bailarinas, pct: totalFromPyl ? bailarinas / totalFromPyl : 0 },
       ];
     }
+    if (activeLocal === "ALL") return data.kpis;
     const venta =
       valOf(/^total\s*ingresos/) ||
       valOf(/^total\s*venta\s*neta/) ||
@@ -131,7 +164,7 @@ function Index() {
       { label: "Costo Laboral", value: laboral, pct: venta ? laboral / venta : 0 },
       { label: "Margen Operativo", value: margenVal, pct: margenPct },
     ];
-  }, [data, activeLocal]);
+  }, [data, activeLocal, hasGastos]);
 
   const filteredDetail = useMemo(
     () =>
@@ -367,6 +400,24 @@ function Index() {
               {rawData.gastos?.length ? (
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
                   <span className="opacity-60">Período</span>
+                  {availableMonths.length > 0 && (
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) { setPeriodFrom(""); setPeriodTo(""); return; }
+                        const [f, t] = monthRange(v);
+                        setPeriodFrom(f);
+                        setPeriodTo(t);
+                      }}
+                      className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                    >
+                      <option value="">— Mes —</option>
+                      {availableMonths.map((m) => (
+                        <option key={m} value={m}>{monthLabel(m)}</option>
+                      ))}
+                    </select>
+                  )}
                   <input
                     type="date"
                     value={periodFrom}
@@ -380,6 +431,18 @@ function Index() {
                     onChange={(e) => setPeriodTo(e.target.value)}
                     className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
                   />
+                  <button
+                    onClick={() => {
+                      const anchor = periodFrom || periodTo || (availableMonths[availableMonths.length - 1] ? availableMonths[availableMonths.length - 1] + "-01" : "");
+                      if (!anchor) return;
+                      const [f, t] = monthRange(anchor.slice(0, 7));
+                      setPeriodFrom(f);
+                      setPeriodTo(t);
+                    }}
+                    className="text-[10px] px-2 py-1 border border-cyan/30 rounded text-cyan hover:bg-cyan/10"
+                  >
+                    MES COMPLETO
+                  </button>
                   <button
                     onClick={() => {
                       const dates = (rawData.gastos ?? []).map((g) => g.fechaPago).filter(Boolean).sort();
