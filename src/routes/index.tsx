@@ -54,6 +54,33 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
+  // Meses disponibles según fechas de pago del archivo cargado
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of rawData.gastos ?? []) {
+      if (g.fechaPago && /^\d{4}-\d{2}/.test(g.fechaPago)) set.add(g.fechaPago.slice(0, 7));
+    }
+    return [...set].sort();
+  }, [rawData.gastos]);
+
+  const monthRange = (ym: string): [string, string] => {
+    const [y, m] = ym.split("-").map(Number);
+    const first = `${ym}-01`;
+    const last = new Date(y, m, 0).getDate();
+    return [first, `${ym}-${String(last).padStart(2, "0")}`];
+  };
+
+  const selectedMonth =
+    periodFrom && periodTo && periodFrom.slice(0, 7) === periodTo.slice(0, 7)
+      ? periodFrom.slice(0, 7)
+      : "";
+
+  const MES_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return `${MES_LABELS[m - 1]} ${y}`;
+  };
+
   const handleFile = async (f?: File | null) => {
     if (!f) return;
     try {
