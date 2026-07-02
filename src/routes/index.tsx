@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, demoData, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,7 +35,13 @@ const fmtDate = (iso?: string) => {
 };
 
 function Index() {
-  const [data, setData] = useState<MatrixData>(demoData);
+  const [rawData, setRawData] = useState<MatrixData>(demoData);
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
+  const data = useMemo(
+    () => (rawData.gastos?.length ? filterMatrixByPeriod(rawData, periodFrom, periodTo) : rawData),
+    [rawData, periodFrom, periodTo],
+  );
   const [activeLocal, setActiveLocal] = useState<string>("ALL");
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -52,7 +58,16 @@ function Index() {
     if (!f) return;
     try {
       const parsed = await parseMatrix(f);
-      setData(parsed);
+      setRawData(parsed);
+      // Auto-setear rango del período detectado
+      if (parsed.gastos?.length) {
+        const dates = parsed.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
+        setPeriodFrom(dates[0] ?? "");
+        setPeriodTo(dates[dates.length - 1] ?? "");
+      } else {
+        setPeriodFrom("");
+        setPeriodTo("");
+      }
       setActiveLocal("ALL");
       setCollapsed({});
       setLoadedFileName(f.name);
@@ -348,7 +363,35 @@ function Index() {
               )}
             </div>
 
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
+              {rawData.gastos?.length ? (
+                <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
+                  <span className="opacity-60">Período</span>
+                  <input
+                    type="date"
+                    value={periodFrom}
+                    onChange={(e) => setPeriodFrom(e.target.value)}
+                    className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                  />
+                  <span className="opacity-60">→</span>
+                  <input
+                    type="date"
+                    value={periodTo}
+                    onChange={(e) => setPeriodTo(e.target.value)}
+                    className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                  />
+                  <button
+                    onClick={() => {
+                      const dates = (rawData.gastos ?? []).map((g) => g.fechaPago).filter(Boolean).sort();
+                      setPeriodFrom(dates[0] ?? "");
+                      setPeriodTo(dates[dates.length - 1] ?? "");
+                    }}
+                    className="text-[10px] px-2 py-1 border border-white/10 rounded hover:border-cyan/40 hover:text-cyan text-muted-foreground"
+                  >
+                    RESET
+                  </button>
+                </div>
+              ) : null}
               <input
                 ref={inputRef}
                 type="file"
