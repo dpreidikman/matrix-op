@@ -506,45 +506,54 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
     ...opts,
   });
 
+  // Estructura EXACTA de la matriz original (P&L_BY_LOCATION_MATRIX)
   const pyl: PyLRow[] = [
-    emptyRow("INGRESOS", { esGrupo: true }),
-    emptyRow("Venta F", { grupo: "INGRESOS" }),
-    emptyRow("Venta NF", { grupo: "INGRESOS" }),
-    emptyRow("Otros Ingresos", { grupo: "INGRESOS" }),
-    emptyRow("TOTAL VENTA BRUTA", { esSubtotal: true }),
-    emptyRow("TOTAL VENTA NETA", { esSubtotal: true }),
-    emptyRow("CMV", { esGrupo: true, esSubtotal: true }),
+    emptyRow("TOTAL VENTA BRUTA", { esGrupo: true, esSubtotal: true }),
+    emptyRow("TOTAL INGRESOS", { esGrupo: true, esSubtotal: true }),
+    emptyRow("COMISIONES", { esGrupo: true, esSubtotal: true }),
+    emptyRow("CMV", { esSubtotal: true }),
     emptyRow("COSTO LABORAL", { esGrupo: true, esSubtotal: true }),
+    emptyRow("GASTOS DE OPERACIÓN", { esGrupo: true, esSubtotal: true }),
   ];
 
-  // Sección de gastos artísticos / operativos (los grupos que pidió el usuario).
-  // Se agregan como grupos desplegables, con sus conceptos y montos reales.
+  // Los grupos que definió el usuario (DJ, PR, BAILARINAS, ...) son hijos
+  // de GASTOS DE OPERACIÓN. Sumamos su total al padre.
+  const opPorLocal = emptyPorLocal();
+  let opTotal = 0;
+  const opChildren: PyLRow[] = [];
   for (const gn of groupNames) {
     const gt = groupTotals.get(gn)!;
     const porLocal = { ...emptyPorLocal(), ...gt.porLocal };
-    pyl.push({
+    opChildren.push({
       concepto: gn,
+      grupo: "GASTOS DE OPERACIÓN",
       porLocal,
       total: gt.total,
-      esGrupo: true,
-      esSubtotal: true,
     });
-    const conceptos = [...groups.get(gn)!.entries()].sort(
-      (a, b) => b[1].total - a[1].total,
-    );
-    for (const [concepto, acc] of conceptos) {
-      pyl.push({
-        concepto,
-        grupo: gn,
-        porLocal: { ...emptyPorLocal(), ...acc.porLocal },
-        total: acc.total,
-      });
+    opTotal += gt.total;
+    for (const [loc, v] of Object.entries(gt.porLocal)) {
+      opPorLocal[loc] = (opPorLocal[loc] ?? 0) + v;
     }
   }
+  // Completar la fila padre "GASTOS DE OPERACIÓN" con la suma
+  const opRow = pyl[pyl.length - 1];
+  opRow.porLocal = opPorLocal;
+  opRow.total = opTotal;
+  pyl.push(...opChildren);
 
-  // Cierre de estructura: filas vacías equivalentes a MATRIX
-  pyl.push(emptyRow("GASTOS DE ESTRUCTURA", { esGrupo: true, esSubtotal: true }));
-  pyl.push(emptyRow("MARGEN OPERATIVO", { esSubtotal: true }));
+  // Continuar estructura de la matriz
+  pyl.push(
+    emptyRow("GASTOS DE MANTENIMIENTO", { esGrupo: true, esSubtotal: true }),
+    emptyRow("COMISIONES TC Y GASTOS BANCARIOS", { esGrupo: true, esSubtotal: true }),
+    emptyRow("HONORARIOS", { esGrupo: true, esSubtotal: true }),
+    emptyRow("REGALIAS", { esGrupo: true, esSubtotal: true }),
+    emptyRow("MKT", { esGrupo: true, esSubtotal: true }),
+    emptyRow("IMPUESTOS", { esSubtotal: true }),
+    emptyRow("TOTAL ALQUILER Y EXPENSAS", { esGrupo: true, esSubtotal: true }),
+    emptyRow("TOTAL SERVICIOS PUBLICOS", { esSubtotal: true }),
+    emptyRow("ESTRUCTURA NG", { esSubtotal: true }),
+    emptyRow("MARGEN DE GANANCIA ESTIMADO", { esSubtotal: true }),
+  );
 
   // KPIs con la MISMA estructura que MATRIX, todo en 0
   const kpis: KPI[] = [
