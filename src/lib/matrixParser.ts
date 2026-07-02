@@ -46,6 +46,7 @@ export type MatrixData = {
   excluidosDeTotal?: LocalKey[];
   gastos?: GastoRow[];
   origen: MatrixOrigin;
+  skeleton?: SkelItem[];
 };
 
 export type GastoRow = {
