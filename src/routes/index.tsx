@@ -363,7 +363,35 @@ function Index() {
               )}
             </div>
 
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
+              {rawData.gastos?.length ? (
+                <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
+                  <span className="opacity-60">Período</span>
+                  <input
+                    type="date"
+                    value={periodFrom}
+                    onChange={(e) => setPeriodFrom(e.target.value)}
+                    className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                  />
+                  <span className="opacity-60">→</span>
+                  <input
+                    type="date"
+                    value={periodTo}
+                    onChange={(e) => setPeriodTo(e.target.value)}
+                    className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                  />
+                  <button
+                    onClick={() => {
+                      const dates = (rawData.gastos ?? []).map((g) => g.fechaPago).filter(Boolean).sort();
+                      setPeriodFrom(dates[0] ?? "");
+                      setPeriodTo(dates[dates.length - 1] ?? "");
+                    }}
+                    className="text-[10px] px-2 py-1 border border-white/10 rounded hover:border-cyan/40 hover:text-cyan text-muted-foreground"
+                  >
+                    RESET
+                  </button>
+                </div>
+              ) : null}
               <input
                 ref={inputRef}
                 type="file"
