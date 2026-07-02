@@ -93,26 +93,31 @@ function Index() {
 
   // KPIs dinámicos según el local seleccionado
   const kpisView = useMemo<typeof data.kpis>(() => {
-    if (activeLocal === "ALL") return data.kpis;
     const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const findRow = (re: RegExp) =>
       data.pyl.find((p) => re.test(norm(p.concepto)));
     const valOf = (re: RegExp) => {
       const r = findRow(re);
-      return r?.porLocal[activeLocal] ?? 0;
+      if (!r) return 0;
+      if (activeLocal === "ALL") return r.total ?? 0;
+      return r.porLocal[activeLocal] ?? 0;
     };
-    if (data.origen === "gastos") {
+    if (hasGastos) {
       const total = valOf(/^total\s*gastos$/);
       const dj = valOf(/dj\s*y\s*bandas/);
       const pr = valOf(/^total\s*pr$/);
       const bailarinas = valOf(/bailarinas/);
+      const totalFromPyl = total || data.pyl
+        .filter((p) => p.esGrupo && p.concepto !== "TOTAL GASTOS")
+        .reduce((s, p) => s + (activeLocal === "ALL" ? p.total : p.porLocal[activeLocal] ?? 0), 0);
       return [
-        { label: "Total Gastos", value: total },
-        { label: "DJ y Bandas", value: dj, pct: total ? dj / total : 0 },
-        { label: "PR", value: pr, pct: total ? pr / total : 0 },
-        { label: "Bailarinas", value: bailarinas, pct: total ? bailarinas / total : 0 },
+        { label: "Total Gastos", value: totalFromPyl },
+        { label: "DJ y Bandas", value: dj, pct: totalFromPyl ? dj / totalFromPyl : 0 },
+        { label: "PR", value: pr, pct: totalFromPyl ? pr / totalFromPyl : 0 },
+        { label: "Bailarinas", value: bailarinas, pct: totalFromPyl ? bailarinas / totalFromPyl : 0 },
       ];
     }
+    if (activeLocal === "ALL") return data.kpis;
     const venta =
       valOf(/^total\s*ingresos/) ||
       valOf(/^total\s*venta\s*neta/) ||
@@ -132,7 +137,7 @@ function Index() {
       { label: "Costo Laboral", value: laboral, pct: venta ? laboral / venta : 0 },
       { label: "Margen Operativo", value: margenVal, pct: margenPct },
     ];
-  }, [data, activeLocal]);
+  }, [data, activeLocal, hasGastos]);
 
   const filteredDetail = useMemo(
     () =>
