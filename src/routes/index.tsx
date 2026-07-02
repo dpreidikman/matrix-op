@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, demoData, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, demoData, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,6 +28,11 @@ export const Route = createFileRoute("/")({
 const fmtMoney = (n: number) =>
   "$" + Math.round(n).toLocaleString("es-AR");
 const fmtPct = (n: number) => (n * 100).toFixed(1) + "%";
+const fmtDate = (iso?: string) => {
+  if (!iso) return "SIN FECHA";
+  const d = new Date(`${iso}T00:00:00`);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString("es-AR");
+};
 
 function Index() {
   const [data, setData] = useState<MatrixData>(demoData);
@@ -35,6 +40,7 @@ function Index() {
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [loadedFileName, setLoadedFileName] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -48,11 +54,13 @@ function Index() {
       const parsed = await parseMatrix(f);
       setData(parsed);
       setActiveLocal("ALL");
-      setSelectedConcept(parsed.pyl[1]?.concepto ?? "");
+      setCollapsed({});
+      setLoadedFileName(f.name);
+      setSelectedConcept(parsed.pyl.find((p) => !p.esGrupo)?.concepto ?? parsed.pyl[0]?.concepto ?? "");
       toast.success(
         parsed.origen === "gastos"
-          ? `Gastos cargados: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
-          : `Matrix cargado: ${parsed.locales.length} locales`
+          ? `Base de gastos cargada: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
+          : `MATRIX cargada: ${parsed.locales.length} locales`
       );
     } catch (e) {
       console.error(e);
@@ -60,6 +68,7 @@ function Index() {
     }
   };
 
+  const isGastos = data.origen === "gastos";
   const excludedSet = new Set(data.excluidosDeTotal ?? []);
   const localesView =
     activeLocal === "ALL"
@@ -76,6 +85,18 @@ function Index() {
       const r = findRow(re);
       return r?.porLocal[activeLocal] ?? 0;
     };
+    if (data.origen === "gastos") {
+      const total = valOf(/^total\s*gastos$/);
+      const dj = valOf(/dj\s*y\s*bandas/);
+      const pr = valOf(/^total\s*pr$/);
+      const bailarinas = valOf(/bailarinas/);
+      return [
+        { label: "Total Gastos", value: total },
+        { label: "DJ y Bandas", value: dj, pct: total ? dj / total : 0 },
+        { label: "PR", value: pr, pct: total ? pr / total : 0 },
+        { label: "Bailarinas", value: bailarinas, pct: total ? bailarinas / total : 0 },
+      ];
+    }
     const venta =
       valOf(/^total\s*ingresos/) ||
       valOf(/^total\s*venta\s*neta/) ||
@@ -138,6 +159,29 @@ function Index() {
     });
     return { rows };
   }, [data, activeLocal]);
+
+  const gastosResumen = useMemo(() => {
+    const rows = data.pyl
+      .filter((p) => p.esGrupo && p.concepto !== "TOTAL GASTOS")
+      .map((p) => ({
+        concepto: p.concepto,
+        total: activeLocal === "ALL" ? p.total : p.porLocal[activeLocal] ?? 0,
+      }))
+      .filter((p) => p.total > 0);
+    return { rows, max: Math.max(...rows.map((r) => r.total), 1) };
+  }, [data, activeLocal]);
+
+  const gastosDetalle = useMemo<GastoRow[]>(() => {
+    return (data.gastos ?? [])
+      .filter((g) => activeLocal === "ALL" || g.local === activeLocal)
+      .sort((a, b) => b.monto - a.monto)
+      .slice(0, 8);
+  }, [data.gastos, activeLocal]);
+
+  const gastosCount = useMemo(
+    () => (data.gastos ?? []).filter((g) => activeLocal === "ALL" || g.local === activeLocal).length,
+    [data.gastos, activeLocal],
+  );
 
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
@@ -210,7 +254,7 @@ function Index() {
               <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
                 <span>{data.locales.length} locales</span>
                 <span>·</span>
-                <span>{fmtMoney(data.kpis.find(k => /venta/i.test(k.label))?.value ?? 0)}</span>
+                <span>{fmtMoney(data.kpis.find(k => isGastos ? /total gastos/i.test(k.label) : /venta/i.test(k.label))?.value ?? 0)}</span>
               </div>
             </button>
 
@@ -218,11 +262,18 @@ function Index() {
               Locales
             </div>
             {data.locales.map((l) => {
-              const ventaLocal = data.pyl.find(p => /venta/i.test(p.concepto))?.porLocal[l] ?? 0;
+              const totalLocal = isGastos
+                ? data.pyl.find(p => /^total\s*gastos$/i.test(p.concepto))?.porLocal[l] ?? 0
+                : data.pyl.find(p => /venta/i.test(p.concepto))?.porLocal[l] ?? 0;
               const margenLocal = data.pyl.find(p => /margen/i.test(p.concepto))?.porLocal[l] ?? 0;
-              const margenPct = ventaLocal ? margenLocal / ventaLocal : 0;
+              const totalBase = data.kpis[0]?.value ?? 0;
+              const margenPct = isGastos
+                ? (totalBase ? totalLocal / totalBase : 0)
+                : (totalLocal ? margenLocal / totalLocal : 0);
               const isActive = activeLocal === l;
-              const statusColor = margenPct >= 0.18 ? "bg-lime" : margenPct >= 0.10 ? "bg-amber" : "bg-magenta";
+              const statusColor = isGastos
+                ? (totalLocal > 0 ? "bg-cyan" : "bg-muted")
+                : (margenPct >= 0.18 ? "bg-lime" : margenPct >= 0.10 ? "bg-amber" : "bg-magenta");
               return (
                 <button
                   key={l}
@@ -243,9 +294,9 @@ function Index() {
                     )}
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
-                    <span>{fmtMoney(ventaLocal)}</span>
+                    <span>{fmtMoney(totalLocal)}</span>
                     <span>·</span>
-                    <span className={margenPct >= 0.18 ? "text-lime" : margenPct >= 0.10 ? "text-amber" : "text-magenta"}>
+                    <span className={isGastos ? "text-cyan" : margenPct >= 0.18 ? "text-lime" : margenPct >= 0.10 ? "text-amber" : "text-magenta"}>
                       {fmtPct(margenPct)}
                     </span>
                   </div>
@@ -288,8 +339,13 @@ function Index() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
-                Consolidated P&L · drill-down activo · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
+                {isGastos ? "Base de gastos · imputaciones por local" : "Consolidated P&L · drill-down activo"} · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
               </p>
+              {loadedFileName && (
+                <p className="mt-1 text-[10px] text-cyan/70 font-mono uppercase tracking-[0.18em]">
+                  Archivo activo · {loadedFileName}
+                </p>
+              )}
             </div>
 
             <div>
@@ -298,7 +354,10 @@ function Index() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 className="hidden"
-                onChange={(e) => handleFile(e.target.files?.[0])}
+                onChange={(e) => {
+                  void handleFile(e.target.files?.[0]);
+                  e.currentTarget.value = "";
+                }}
               />
               <button
                 onClick={() => inputRef.current?.click()}
@@ -307,8 +366,8 @@ function Index() {
                 <span className="absolute inset-0 bg-gradient-to-r from-cyan/0 via-cyan/20 to-cyan/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 <span className="relative flex items-center gap-2">
                   <Upload className="size-4" />
-                  <span className="hidden sm:inline">UPLOAD_MATRIX.XLSX</span>
-                  <span className="sm:hidden">UPLOAD</span>
+                  <span className="hidden sm:inline">CARGAR MATRIX / GASTOS</span>
+                  <span className="sm:hidden">CARGAR</span>
                 </span>
               </button>
             </div>
@@ -337,7 +396,7 @@ function Index() {
                     <Zap className={`size-3 ${accentClass[accent]}`} />
                   </div>
                   <div className="font-mono text-2xl font-bold tabular-nums">
-                    {k.pct != null && k.label !== "Margen Operativo" ? fmtPct(k.pct) : fmtMoney(k.value)}
+                    {data.origen !== "gastos" && k.pct != null && k.label !== "Margen Operativo" ? fmtPct(k.pct) : fmtMoney(k.value)}
                   </div>
                   {k.delta != null && (
                     <div
@@ -363,7 +422,7 @@ function Index() {
               <div className="flex items-center gap-3">
                 <span className="size-2 rounded-full bg-cyan animate-[pulse-glow_2s_ease-in-out_infinite] shadow-[0_0_10px_currentColor]" />
                 <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  P&L_BY_LOCATION_MATRIX
+                  {data.origen === "gastos" ? "GASTOS_BY_LOCATION_MATRIX" : "P&L_BY_LOCATION_MATRIX"}
                 </span>
               </div>
               <div className="font-mono text-[10px] text-muted-foreground">
@@ -499,21 +558,57 @@ function Index() {
               <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                 <div>
                   <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                    Drill-Down · Proyección vs Real
+                    {data.origen === "gastos" ? "Drill-Down · Gastos por imputación" : "Drill-Down · Proyección vs Real"}
                   </div>
                   <h3 className="font-display text-xl font-bold tracking-wide mt-1">
-                    Venta Bruta por Local
+                    {data.origen === "gastos" ? "Gastos por Categoría" : "Venta Bruta por Local"}
                   </h3>
                 </div>
-                <div className="flex gap-3 text-[10px] font-mono">
-                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-cyan" /><span className="text-muted-foreground">VENTA F</span></span>
-                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-magenta" /><span className="text-muted-foreground">VENTA NF</span></span>
-                  <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-lime" /><span className="text-muted-foreground">OTROS ING.</span></span>
-                </div>
+                {data.origen !== "gastos" && (
+                  <div className="flex gap-3 text-[10px] font-mono">
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-cyan" /><span className="text-muted-foreground">VENTA F</span></span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-magenta" /><span className="text-muted-foreground">VENTA NF</span></span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-lime" /><span className="text-muted-foreground">OTROS ING.</span></span>
+                  </div>
+                )}
               </div>
 
-              <div>
-                {ventaBruta.rows.map((r, i) => {
+              {data.origen === "gastos" ? (
+                <div>
+                  {gastosResumen.rows.map((r, i) => {
+                    const w = (r.total / gastosResumen.max) * 100;
+                    const accent = i % 3 === 0 ? "bg-cyan shadow-[0_0_14px_var(--color-cyan)]" : i % 3 === 1 ? "bg-magenta shadow-[0_0_14px_var(--color-magenta)]" : "bg-lime shadow-[0_0_14px_var(--color-lime)]";
+                    return (
+                      <div key={r.concepto} className="mb-5 last:mb-0">
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <div className="text-xs font-mono uppercase tracking-[0.2em] text-foreground">
+                            {r.concepto}
+                          </div>
+                          <div className="font-mono text-sm font-bold tabular-nums text-cyan">
+                            {fmtMoney(r.total)}
+                          </div>
+                        </div>
+                        <div className="h-5 rounded bg-white/5 ring-1 ring-white/10 overflow-hidden">
+                          <div
+                            title={`${r.concepto}: ${fmtMoney(r.total)}`}
+                            className={`h-full ${accent} flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-2 whitespace-nowrap`}
+                            style={{ width: `${w}%` }}
+                          >
+                            {w > 18 ? fmtMoney(r.total) : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {gastosResumen.rows.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm font-mono">
+                      Sin gastos para el filtro seleccionado.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {ventaBruta.rows.map((r, i) => {
                   const denom = r.segSum || 1;
                   const fPct = (r.f / denom) * 100;
                   const nfPct = (r.nf / denom) * 100;
@@ -579,12 +674,13 @@ function Index() {
                     </div>
                   );
                 })}
-                {ventaBruta.rows.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm font-mono">
-                    Sin datos de venta bruta.
-                  </div>
-                )}
-              </div>
+                  {ventaBruta.rows.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm font-mono">
+                      Sin datos de venta bruta.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ALERTAS */}
@@ -592,48 +688,83 @@ function Index() {
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle className="size-4 text-amber" />
                 <div className="text-[10px] font-mono uppercase tracking-[0.25em] text-muted-foreground">
-                  Anomalías Detectadas
+                  {isGastos ? "Detalle de Gastos" : "Anomalías Detectadas"}
                 </div>
               </div>
               <div className="space-y-3 flex-1">
-                {data.detalle
-                  .filter((d) => Math.abs(d.variacion) > 0.08)
-                  .slice(0, 4)
-                  .map((d, i) => {
-                    const crit = Math.abs(d.variacion) > 0.12;
-                    return (
-                      <div
-                        key={i}
-                        className={`rounded-lg border p-3 ${
-                          crit
-                            ? "border-magenta/30 bg-magenta/5"
-                            : "border-amber/30 bg-amber/5"
-                        }`}
-                      >
-                        <div
-                          className={`text-[9px] font-mono font-bold mb-1 ${
-                            crit ? "text-magenta" : "text-amber"
-                          }`}
-                        >
-                          {crit ? "CRÍTICO" : "ALERTA"} · {fmtPct(d.variacion)}
-                        </div>
-                        <div className="text-xs text-foreground/90">
-                          {d.categoria} en{" "}
-                          <span className="text-cyan">{d.local}</span> desviado{" "}
-                          {d.variacion > 0 ? "sobre" : "bajo"} proyección.
+                {isGastos ? (
+                  <>
+                    <div className="rounded-lg border border-cyan/30 bg-cyan/5 p-3">
+                      <div className="text-[9px] font-mono font-bold mb-1 text-cyan">
+                        {activeLocal === "ALL" ? "BASE COMPLETA" : activeLocal} · {gastosCount} ÍTEMS CARGADOS
+                      </div>
+                      <div className="text-xs text-foreground/80">
+                        Se guardó fecha de pago, local, concepto, imputación y monto de cada gasto.
+                      </div>
+                    </div>
+                    {gastosDetalle.map((g, i) => (
+                      <div key={`${g.local}-${g.concepto}-${g.fechaPago}-${i}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[9px] font-mono font-bold text-cyan uppercase tracking-wider">
+                              {fmtDate(g.fechaPago)} · {g.local}
+                            </div>
+                            <div className="mt-1 text-xs text-foreground/90 truncate" title={g.concepto}>
+                              {g.concepto}
+                            </div>
+                            <div className="mt-1 text-[10px] font-mono text-muted-foreground uppercase">
+                              {g.grupo}
+                            </div>
+                          </div>
+                          <div className="font-mono text-sm font-bold text-lime tabular-nums shrink-0">
+                            {fmtMoney(g.monto)}
+                          </div>
                         </div>
                       </div>
-                    );
-                  })}
-                {data.detalle.every((d) => Math.abs(d.variacion) <= 0.08) && (
-                  <div className="rounded-lg border border-lime/30 bg-lime/5 p-3">
-                    <div className="text-[9px] font-mono font-bold mb-1 text-lime">
-                      OK · DENTRO DE PARÁMETROS
-                    </div>
-                    <div className="text-xs text-foreground/80">
-                      Todas las categorías dentro del ±8% de proyección.
-                    </div>
-                  </div>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {data.detalle
+                      .filter((d) => Math.abs(d.variacion) > 0.08)
+                      .slice(0, 4)
+                      .map((d, i) => {
+                        const crit = Math.abs(d.variacion) > 0.12;
+                        return (
+                          <div
+                            key={i}
+                            className={`rounded-lg border p-3 ${
+                              crit
+                                ? "border-magenta/30 bg-magenta/5"
+                                : "border-amber/30 bg-amber/5"
+                            }`}
+                          >
+                            <div
+                              className={`text-[9px] font-mono font-bold mb-1 ${
+                                crit ? "text-magenta" : "text-amber"
+                              }`}
+                            >
+                              {crit ? "CRÍTICO" : "ALERTA"} · {fmtPct(d.variacion)}
+                            </div>
+                            <div className="text-xs text-foreground/90">
+                              {d.categoria} en{" "}
+                              <span className="text-cyan">{d.local}</span> desviado{" "}
+                              {d.variacion > 0 ? "sobre" : "bajo"} proyección.
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {data.detalle.every((d) => Math.abs(d.variacion) <= 0.08) && (
+                      <div className="rounded-lg border border-lime/30 bg-lime/5 p-3">
+                        <div className="text-[9px] font-mono font-bold mb-1 text-lime">
+                          OK · DENTRO DE PARÁMETROS
+                        </div>
+                        <div className="text-xs text-foreground/80">
+                          Todas las categorías dentro del ±8% de proyección.
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

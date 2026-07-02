@@ -34,6 +34,8 @@ export type DetalleRow = {
   variacion: number;
 };
 
+export type MatrixOrigin = "matrix" | "gastos";
+
 export type MatrixData = {
   periodo: Periodo;
   locales: LocalKey[];
@@ -43,7 +45,7 @@ export type MatrixData = {
   proyecciones?: Record<LocalKey, number>;
   excluidosDeTotal?: LocalKey[];
   gastos?: GastoRow[];
-  origen?: "matrix" | "gastos";
+  origen: MatrixOrigin;
 };
 
 export type GastoRow = {
@@ -85,13 +87,10 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
-  // Router: si el archivo es la Base de Gastos, delegar.
-  if (wb.SheetNames.some((n) => /detalle/i.test(n)) &&
-      wb.SheetNames.some((n) => /resumen/i.test(n)) &&
-      !wb.SheetNames.some((n) => /^ventas?$/i.test(n))) {
-    const gastos = parseGastosWorkbook(wb, file);
-    if (gastos) return gastos;
-  }
+  // Router: si el archivo tiene estructura de Base de Gastos, delegar.
+  // No dependemos del nombre de la hoja ni de una fila fija: buscamos columnas clave.
+  const gastos = parseGastosWorkbook(wb, file);
+  if (gastos) return gastos;
 
   // Buscar hoja RESUMEN (la matriz consolidada por local).
   const sheetName =
@@ -299,7 +298,7 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
     kpis[0].delta = (venta - proyTotal) / venta;
   }
 
-  return { periodo, locales, kpis, pyl, detalle, proyecciones, excluidosDeTotal };
+  return { periodo, locales, kpis, pyl, detalle, proyecciones, excluidosDeTotal, origen: "matrix" };
 }
 
 // -------------------- Parser Base Gastos Semanales --------------------
@@ -362,19 +361,36 @@ function grupoDeImputacion(imp: string): string {
 }
 
 function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
-  const detName = wb.SheetNames.find((n) => /detalle/i.test(n));
-  if (!detName) return null;
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[detName], {
-    header: 1,
-    defval: null,
-    blankrows: false,
-  });
-  if (rows.length < 2) return null;
+  // Header típico: Local, Calendario, Fecha de pago, Semana, Mes, Concepto, Monto, Imputación...
+  // No asumimos nombre de hoja ni fila fija: buscamos esa cabecera en todo el libro.
+  let detName = "";
+  let rows: unknown[][] = [];
+  let headerIdx = -1;
+  let header: unknown[] = [];
 
-  // Header en fila 2 (index 1): [None, 'Local', 'Calendario', 'Fecha de pago', 'Semana Matrix', 'Semana', 'Mes', 'Concepto', 'Monto', 'Imputación', ...]
-  const header = rows[1] ?? [];
-  const col = (re: RegExp) =>
-    header.findIndex((h) => re.test(normalize(h)));
+  for (const sheetName of wb.SheetNames) {
+    const sheetRows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+      header: 1,
+      defval: null,
+      blankrows: false,
+    });
+    for (let r = 0; r < Math.min(sheetRows.length, 35); r++) {
+      const candidate = sheetRows[r] ?? [];
+      const joined = candidate.map((c) => normalize(c)).join("|");
+      if (/\blocal\b/.test(joined) && /concepto/.test(joined) && /monto/.test(joined) && /imputaci/.test(joined)) {
+        detName = sheetName;
+        rows = sheetRows;
+        headerIdx = r;
+        header = candidate;
+        break;
+      }
+    }
+    if (headerIdx >= 0) break;
+  }
+
+  if (headerIdx < 0) return null;
+
+  const col = (re: RegExp) => header.findIndex((h) => re.test(normalize(h)));
   const cLocal = col(/^local$/);
   const cFechaPago = col(/fecha.*pago/);
   const cFecha = col(/calendario|^fecha$/);
@@ -389,13 +405,13 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
 
   const gastos: GastoRow[] = [];
   const localesSet = new Set<string>();
-  for (let r = 2; r < rows.length; r++) {
+  for (let r = headerIdx + 1; r < rows.length; r++) {
     const row = rows[r] ?? [];
     const local = canonLocal(row[cLocal]);
     const imp = String(row[cImp] ?? "").trim();
     const concepto = String(row[cConcepto] ?? "").trim();
     const monto = num(row[cMonto]);
-    if (!local || !imp || !concepto) continue;
+    if (!local || !imp || !concepto || !monto) continue;
     localesSet.add(local);
     const fp = toDate(row[cFechaPago]);
     const fx = toDate(row[cFecha]);
@@ -413,6 +429,8 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
       alias: cAlias >= 0 ? String(row[cAlias] ?? "") : undefined,
     });
   }
+
+  if (!gastos.length) return null;
 
   // Locales del auxiliar (para completar columnas aunque no tengan gastos)
   const auxName = wb.SheetNames.find((n) => /auxiliar/i.test(n));
@@ -563,6 +581,7 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
 
 // Demo data para mostrar el dashboard sin archivo cargado
 export const demoData: MatrixData = {
+  origen: "matrix",
   periodo: { mes: "OCT", anio: 2025 },
   locales: [
     "LA MALA",
