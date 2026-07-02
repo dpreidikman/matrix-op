@@ -49,7 +49,11 @@ function Index() {
       setData(parsed);
       setActiveLocal("ALL");
       setSelectedConcept(parsed.pyl[1]?.concepto ?? "");
-      toast.success(`Matrix cargado: ${parsed.locales.length} locales`);
+      toast.success(
+        parsed.origen === "gastos"
+          ? `Gastos cargados: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
+          : `Matrix cargado: ${parsed.locales.length} locales`
+      );
     } catch (e) {
       console.error(e);
       toast.error("No se pudo parsear el archivo");
