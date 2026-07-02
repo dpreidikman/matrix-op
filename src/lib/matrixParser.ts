@@ -302,6 +302,265 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   return { periodo, locales, kpis, pyl, detalle, proyecciones, excluidosDeTotal };
 }
 
+// -------------------- Parser Base Gastos Semanales --------------------
+
+const MESES = [
+  "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
+];
+
+function toDate(v: unknown): Date | null {
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return v;
+  if (typeof v === "number") {
+    // Excel serial (epoch 1899-12-30)
+    const ms = Math.round((v - 25569) * 86400 * 1000);
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function toISO(d: Date | null): string {
+  if (!d) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function canonLocal(s: unknown): string {
+  const n = normalize(s).replace(/\s+/g, " ").trim();
+  const map: Record<string, string> = {
+    "la mala": "LA MALA",
+    "cruza polo": "CRUZA POLO",
+    "crz polo": "CRUZA POLO",
+    "cruza recoleta": "CRUZA RECOLETA",
+    "crz recoleta": "CRUZA RECOLETA",
+    "costa": "COSTA GRAL",
+    "costa gral": "COSTA GRAL",
+    "costa resto": "COSTA RESTO",
+    "costa club": "COSTA CLUB",
+    "milvidas": "MILVIDAS",
+    "kona": "KONA",
+    "cochinchina": "COCHINCHINA",
+    "comedor": "COMEDOR",
+  };
+  return map[n] ?? String(s ?? "").toUpperCase().trim();
+}
+
+function grupoDeImputacion(imp: string): string {
+  const n = normalize(imp);
+  if (n === "dj") return "TOTAL DJ Y BANDAS";
+  if (n === "pr") return "TOTAL PR";
+  if (n === "bailarinas") return "TOTAL BAILARINAS";
+  if (n === "seguridad") return "TOTAL SEGURIDAD";
+  if (n === "seguridad intel") return "TOTAL SEGURIDAD INTELIGENCIA";
+  if (n === "bombero" || n === "bomberos") return "TOTAL BOMBEROS";
+  if (n === "portero" || n === "porteros") return "TOTAL PORTEROS";
+  if (n === "iluminador") return "TOTAL ILUMINACIÓN";
+  if (n === "vj") return "TOTAL VJ";
+  return "TOTAL " + imp.trim().toUpperCase();
+}
+
+function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
+  const detName = wb.SheetNames.find((n) => /detalle/i.test(n));
+  if (!detName) return null;
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[detName], {
+    header: 1,
+    defval: null,
+    blankrows: false,
+  });
+  if (rows.length < 2) return null;
+
+  // Header en fila 2 (index 1): [None, 'Local', 'Calendario', 'Fecha de pago', 'Semana Matrix', 'Semana', 'Mes', 'Concepto', 'Monto', 'Imputación', ...]
+  const header = rows[1] ?? [];
+  const col = (re: RegExp) =>
+    header.findIndex((h) => re.test(normalize(h)));
+  const cLocal = col(/^local$/);
+  const cFechaPago = col(/fecha.*pago/);
+  const cFecha = col(/calendario|^fecha$/);
+  const cSemana = col(/^semana$/);
+  const cMes = col(/^mes$/);
+  const cConcepto = col(/^concepto$/);
+  const cMonto = col(/^monto$/);
+  const cImp = col(/imputaci/);
+  const cForma = col(/forma.*pago/);
+  const cAlias = col(/alias/);
+  if (cLocal < 0 || cMonto < 0 || cImp < 0 || cConcepto < 0) return null;
+
+  const gastos: GastoRow[] = [];
+  const localesSet = new Set<string>();
+  for (let r = 2; r < rows.length; r++) {
+    const row = rows[r] ?? [];
+    const local = canonLocal(row[cLocal]);
+    const imp = String(row[cImp] ?? "").trim();
+    const concepto = String(row[cConcepto] ?? "").trim();
+    const monto = num(row[cMonto]);
+    if (!local || !imp || !concepto) continue;
+    localesSet.add(local);
+    const fp = toDate(row[cFechaPago]);
+    const fx = toDate(row[cFecha]);
+    gastos.push({
+      local,
+      fechaPago: toISO(fp),
+      fecha: toISO(fx),
+      concepto,
+      imputacion: imp,
+      grupo: grupoDeImputacion(imp),
+      monto,
+      semana: cSemana >= 0 ? String(row[cSemana] ?? "") : undefined,
+      mes: cMes >= 0 ? String(row[cMes] ?? "") : undefined,
+      formaPago: cForma >= 0 ? String(row[cForma] ?? "") : undefined,
+      alias: cAlias >= 0 ? String(row[cAlias] ?? "") : undefined,
+    });
+  }
+
+  // Locales del auxiliar (para completar columnas aunque no tengan gastos)
+  const auxName = wb.SheetNames.find((n) => /auxiliar/i.test(n));
+  if (auxName) {
+    const aux: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[auxName], {
+      header: 1,
+      defval: null,
+      blankrows: false,
+    });
+    for (let r = 1; r < aux.length; r++) {
+      const v = aux[r]?.[0];
+      if (v) localesSet.add(canonLocal(v));
+    }
+  }
+
+  // Orden canónico
+  const orden = [
+    "LA MALA","CRUZA POLO","CRUZA RECOLETA",
+    "COSTA RESTO","COSTA CLUB","COSTA GRAL",
+    "MILVIDAS","KONA","COCHINCHINA","COMEDOR",
+  ];
+  const locales = orden.filter((l) => localesSet.has(l))
+    .concat([...localesSet].filter((l) => !orden.includes(l)));
+  const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
+  const excluded = new Set(excluidosDeTotal);
+
+  // Agrupar: grupo -> concepto -> porLocal
+  type Acc = { porLocal: Record<string, number>; total: number };
+  const groups = new Map<string, Map<string, Acc>>();
+  const groupTotals = new Map<string, Acc>();
+  for (const g of gastos) {
+    if (!groups.has(g.grupo)) {
+      groups.set(g.grupo, new Map());
+      groupTotals.set(g.grupo, { porLocal: {}, total: 0 });
+    }
+    const gMap = groups.get(g.grupo)!;
+    if (!gMap.has(g.concepto)) gMap.set(g.concepto, { porLocal: {}, total: 0 });
+    const acc = gMap.get(g.concepto)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
+    const gt = groupTotals.get(g.grupo)!;
+    gt.porLocal[g.local] = (gt.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) gt.total += g.monto;
+  }
+
+  // Orden de grupos: DJ, PR, BAILARINAS primero
+  const orderKey = (g: string) => {
+    if (/dj\s*y\s*bandas/i.test(g)) return 0;
+    if (/\bpr\b/i.test(g)) return 1;
+    if (/bailarinas/i.test(g)) return 2;
+    if (/seguridad(?!\s*intel)/i.test(g)) return 3;
+    if (/seguridad\s*intel/i.test(g)) return 4;
+    if (/portero/i.test(g)) return 5;
+    if (/bombero/i.test(g)) return 6;
+    return 10;
+  };
+  const groupNames = [...groups.keys()].sort(
+    (a, b) => orderKey(a) - orderKey(b) || a.localeCompare(b),
+  );
+
+  const pyl: PyLRow[] = [];
+  let totalGeneral = 0;
+  const totalPorLocal: Record<string, number> = {};
+  for (const gn of groupNames) {
+    const gt = groupTotals.get(gn)!;
+    pyl.push({
+      concepto: gn,
+      porLocal: gt.porLocal,
+      total: gt.total,
+      esGrupo: true,
+      esSubtotal: true,
+    });
+    totalGeneral += gt.total;
+    for (const [loc, v] of Object.entries(gt.porLocal)) {
+      if (!excluded.has(loc)) totalPorLocal[loc] = (totalPorLocal[loc] ?? 0) + v;
+    }
+    // Conceptos (ordenados desc por total)
+    const conceptos = [...groups.get(gn)!.entries()].sort(
+      (a, b) => b[1].total - a[1].total,
+    );
+    for (const [concepto, acc] of conceptos) {
+      pyl.push({
+        concepto,
+        grupo: gn,
+        porLocal: acc.porLocal,
+        total: acc.total,
+      });
+    }
+  }
+
+  // Total general al inicio
+  pyl.unshift({
+    concepto: "TOTAL GASTOS",
+    porLocal: totalPorLocal,
+    total: totalGeneral,
+    esGrupo: true,
+    esSubtotal: true,
+  });
+
+  const kpiVal = (re: RegExp) =>
+    groupTotals.get([...groupTotals.keys()].find((k) => re.test(k)) ?? "")?.total ?? 0;
+  const kpis: KPI[] = [
+    { label: "Total Gastos", value: totalGeneral },
+    { label: "DJ y Bandas", value: kpiVal(/dj\s*y\s*bandas/i), pct: totalGeneral ? kpiVal(/dj\s*y\s*bandas/i) / totalGeneral : 0 },
+    { label: "PR", value: kpiVal(/^total pr$/i), pct: totalGeneral ? kpiVal(/^total pr$/i) / totalGeneral : 0 },
+    { label: "Bailarinas", value: kpiVal(/bailarinas/i), pct: totalGeneral ? kpiVal(/bailarinas/i) / totalGeneral : 0 },
+  ];
+
+  // Periodo desde Resumen (fila 2: Desde / Hasta)
+  let mes = "";
+  let anio: number | string = new Date().getFullYear();
+  const resName = wb.SheetNames.find((n) => /resumen/i.test(n));
+  if (resName) {
+    const resRows: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[resName], {
+      header: 1, defval: null, blankrows: true,
+    });
+    const desde = toDate(resRows[1]?.[1]);
+    if (desde) {
+      mes = MESES[desde.getMonth()];
+      anio = desde.getFullYear();
+    }
+  }
+  if (!mes && gastos.length) {
+    const d = toDate(gastos[0].fechaPago);
+    if (d) { mes = MESES[d.getMonth()]; anio = d.getFullYear(); }
+  }
+
+  // Detalle: cada gasto como fila drill-down
+  const detalle: DetalleRow[] = gastos.map((g) => ({
+    categoria: `${g.concepto} · ${g.fechaPago}`,
+    local: g.local,
+    proyectado: 0,
+    real: g.monto,
+    variacion: 0,
+  }));
+
+  return {
+    periodo: { mes: mes || "—", anio },
+    locales,
+    kpis,
+    pyl,
+    detalle,
+    excluidosDeTotal,
+    gastos,
+    origen: "gastos",
+  };
+}
+
 // Demo data para mostrar el dashboard sin archivo cargado
 export const demoData: MatrixData = {
   periodo: { mes: "OCT", anio: 2025 },
