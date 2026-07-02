@@ -84,6 +84,44 @@ const localKey = (s: unknown) =>
     .replace(/costa\s*gral/g, "costa7070")
     .replace(/[^a-z0-9]/g, "");
 
+// Combina dos MatrixData (típicamente: matrix como base + gastos detallados como overlay).
+// - Union de locales
+// - Suma porLocal y total de filas coincidentes por concepto (case/acentos-insensible)
+// - Agrega filas nuevas del overlay que no existían en la base
+// - Concatena arrays de gastos
+export function mergeMatrixData(base: MatrixData, overlay: MatrixData): MatrixData {
+  const conceptKey = (s: string) => normalize(s).replace(/\s+/g, " ");
+  const locales = Array.from(new Set([...base.locales, ...overlay.locales]));
+  const pyl: PyLRow[] = base.pyl.map((r) => ({
+    ...r,
+    porLocal: { ...r.porLocal },
+  }));
+  const idx = new Map<string, number>();
+  pyl.forEach((r, i) => idx.set(conceptKey(r.concepto), i));
+  for (const r of overlay.pyl) {
+    const k = conceptKey(r.concepto);
+    const i = idx.get(k);
+    if (i != null) {
+      const dst = pyl[i];
+      for (const [loc, v] of Object.entries(r.porLocal)) {
+        dst.porLocal[loc] = (dst.porLocal[loc] ?? 0) + (v ?? 0);
+      }
+      dst.total = (dst.total ?? 0) + (r.total ?? 0);
+    } else {
+      pyl.push({ ...r, porLocal: { ...r.porLocal } });
+      idx.set(k, pyl.length - 1);
+    }
+  }
+  return {
+    ...base,
+    locales,
+    pyl,
+    gastos: [...(base.gastos ?? []), ...(overlay.gastos ?? [])],
+    skeleton: base.skeleton ?? overlay.skeleton,
+    proyecciones: { ...(overlay.proyecciones ?? {}), ...(base.proyecciones ?? {}) },
+  };
+}
+
 export async function parseMatrix(file: File): Promise<MatrixData> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
