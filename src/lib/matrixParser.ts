@@ -452,8 +452,9 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
     "COSTA RESTO","COSTA CLUB","COSTA GRAL",
     "MILVIDAS","KONA","COCHINCHINA","COMEDOR",
   ];
-  const locales = orden.filter((l) => localesSet.has(l))
-    .concat([...localesSet].filter((l) => !orden.includes(l)));
+  // Mantener SIEMPRE los locales canónicos de la matriz (aunque no haya gastos en algunos)
+  const extra = [...localesSet].filter((l) => !orden.includes(l));
+  const locales = [...orden, ...extra];
   const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
   const excluded = new Set(excluidosDeTotal);
 
@@ -491,23 +492,43 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
     (a, b) => orderKey(a) - orderKey(b) || a.localeCompare(b),
   );
 
-  const pyl: PyLRow[] = [];
-  let totalGeneral = 0;
-  const totalPorLocal: Record<string, number> = {};
+  // Construir P&L con la MISMA ESTRUCTURA que MATRIX: esqueleto de secciones
+  // vacío, y solo completar los grupos de gastos que definió el usuario.
+  const emptyPorLocal = (): Record<string, number> => {
+    const o: Record<string, number> = {};
+    for (const l of locales) o[l] = 0;
+    return o;
+  };
+  const emptyRow = (concepto: string, opts: Partial<PyLRow> = {}): PyLRow => ({
+    concepto,
+    porLocal: emptyPorLocal(),
+    total: 0,
+    ...opts,
+  });
+
+  const pyl: PyLRow[] = [
+    emptyRow("INGRESOS", { esGrupo: true }),
+    emptyRow("Venta F", { grupo: "INGRESOS" }),
+    emptyRow("Venta NF", { grupo: "INGRESOS" }),
+    emptyRow("Otros Ingresos", { grupo: "INGRESOS" }),
+    emptyRow("TOTAL VENTA BRUTA", { esSubtotal: true }),
+    emptyRow("TOTAL VENTA NETA", { esSubtotal: true }),
+    emptyRow("CMV", { esGrupo: true, esSubtotal: true }),
+    emptyRow("COSTO LABORAL", { esGrupo: true, esSubtotal: true }),
+  ];
+
+  // Sección de gastos artísticos / operativos (los grupos que pidió el usuario).
+  // Se agregan como grupos desplegables, con sus conceptos y montos reales.
   for (const gn of groupNames) {
     const gt = groupTotals.get(gn)!;
+    const porLocal = { ...emptyPorLocal(), ...gt.porLocal };
     pyl.push({
       concepto: gn,
-      porLocal: gt.porLocal,
+      porLocal,
       total: gt.total,
       esGrupo: true,
       esSubtotal: true,
     });
-    totalGeneral += gt.total;
-    for (const [loc, v] of Object.entries(gt.porLocal)) {
-      if (!excluded.has(loc)) totalPorLocal[loc] = (totalPorLocal[loc] ?? 0) + v;
-    }
-    // Conceptos (ordenados desc por total)
     const conceptos = [...groups.get(gn)!.entries()].sort(
       (a, b) => b[1].total - a[1].total,
     );
@@ -515,28 +536,22 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
       pyl.push({
         concepto,
         grupo: gn,
-        porLocal: acc.porLocal,
+        porLocal: { ...emptyPorLocal(), ...acc.porLocal },
         total: acc.total,
       });
     }
   }
 
-  // Total general al inicio
-  pyl.unshift({
-    concepto: "TOTAL GASTOS",
-    porLocal: totalPorLocal,
-    total: totalGeneral,
-    esGrupo: true,
-    esSubtotal: true,
-  });
+  // Cierre de estructura: filas vacías equivalentes a MATRIX
+  pyl.push(emptyRow("GASTOS DE ESTRUCTURA", { esGrupo: true, esSubtotal: true }));
+  pyl.push(emptyRow("MARGEN OPERATIVO", { esSubtotal: true }));
 
-  const kpiVal = (re: RegExp) =>
-    groupTotals.get([...groupTotals.keys()].find((k) => re.test(k)) ?? "")?.total ?? 0;
+  // KPIs con la MISMA estructura que MATRIX, todo en 0
   const kpis: KPI[] = [
-    { label: "Total Gastos", value: totalGeneral },
-    { label: "DJ y Bandas", value: kpiVal(/dj\s*y\s*bandas/i), pct: totalGeneral ? kpiVal(/dj\s*y\s*bandas/i) / totalGeneral : 0 },
-    { label: "PR", value: kpiVal(/^total pr$/i), pct: totalGeneral ? kpiVal(/^total pr$/i) / totalGeneral : 0 },
-    { label: "Bailarinas", value: kpiVal(/bailarinas/i), pct: totalGeneral ? kpiVal(/bailarinas/i) / totalGeneral : 0 },
+    { label: "Venta Neta", value: 0 },
+    { label: "CMV", value: 0, pct: 0 },
+    { label: "Costo Laboral", value: 0, pct: 0 },
+    { label: "Margen Operativo", value: 0, pct: 0 },
   ];
 
   // Periodo desde Resumen (fila 2: Desde / Hasta)
@@ -575,7 +590,8 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
     detalle,
     excluidosDeTotal,
     gastos,
-    origen: "gastos",
+    // Mantener la misma UI que MATRIX
+    origen: "matrix",
   };
 }
 
