@@ -346,18 +346,127 @@ function canonLocal(s: unknown): string {
   return map[n] ?? String(s ?? "").toUpperCase().trim();
 }
 
-function grupoDeImputacion(imp: string): string {
+// Esqueleto EXACTO de la matriz P&L (RESUMEN). Cada entry: [concepto, parent|null]
+// parent === null → fila raíz (grupo o subtotal). parent !== null → hijo (subcategoría).
+type SkelItem = { concepto: string; parent: string | null; esGrupo?: boolean; esSubtotal?: boolean };
+const MATRIX_SKELETON: SkelItem[] = [
+  { concepto: "TOTAL VENTA BRUTA", parent: null, esSubtotal: true },
+  { concepto: "TOTAL VENTA NETA", parent: null, esSubtotal: true },
+  { concepto: "TOTAL INGRESOS", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "VENTA F", parent: "TOTAL INGRESOS" },
+  { concepto: "VENTA NF", parent: "TOTAL INGRESOS" },
+  { concepto: "OTROS INGRESOS", parent: "TOTAL INGRESOS" },
+  { concepto: "COMISIONES", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "Eventos", parent: "COMISIONES" },
+  { concepto: "Comisiones por venta", parent: "COMISIONES" },
+  { concepto: "Comisiones por MP", parent: "COMISIONES" },
+  { concepto: "Otras Comisiones", parent: "COMISIONES" },
+  { concepto: "CMV", parent: null, esSubtotal: true },
+  { concepto: "COSTO LABORAL", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "TOTAL SUELDOS", parent: "COSTO LABORAL" },
+  { concepto: "TOTAL CARGAS SOCIALES", parent: "COSTO LABORAL" },
+  { concepto: "EXTRAS", parent: "COSTO LABORAL" },
+  { concepto: "LIQUIDACIONES", parent: "COSTO LABORAL" },
+  { concepto: "ACUERDOS LABORALES", parent: "COSTO LABORAL" },
+  { concepto: "OTROS", parent: "COSTO LABORAL" },
+  { concepto: "GASTOS DE OPERACIÓN", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "TOTAL SEGURIDAD VIGILANTES", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "TOTAL INTELIGENCIA", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "PORTERO", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "LIMPIEZA", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "BAZAR & VAJILLA", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "LIBRERÍA", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "VIÁTICOS", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "FLETES", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "SEGUROS", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "COMPRAS EQUIPAMIENTOS", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "UNIFORMES", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "TOTAL VALET PARKING", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "TOTAL VELAS", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "TOTAL PARQUIZADO", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "COMPRAS EQUIPAMIENTO ELECTRÓNICO", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "COMPRAS EQUIPAMIENTO GASTRONÓMICO", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "PULSERAS", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "CATERING", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "TOTAL LAVADERO", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "COMIDA DE PERSONAL", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "VALIDADORES", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "OTROS GASTOS DE OPERACIÓN", parent: "GASTOS DE OPERACIÓN" },
+  { concepto: "GASTOS DE MANTENIMIENTO", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "MANTENIMIENTO LOCALES", parent: "GASTOS DE MANTENIMIENTO" },
+  { concepto: "MANTENIMIENTO SERVICIOS", parent: "GASTOS DE MANTENIMIENTO" },
+  { concepto: "MANTENIMIENTO SISTEMAS", parent: "GASTOS DE MANTENIMIENTO" },
+  { concepto: "COMISIONES TC Y GASTOS BANCARIOS", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "GASTOS BANCARIOS", parent: "COMISIONES TC Y GASTOS BANCARIOS" },
+  { concepto: "COMISIONES TC", parent: "COMISIONES TC Y GASTOS BANCARIOS" },
+  { concepto: "HONORARIOS", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "TOTAL HONORARIOS", parent: "HONORARIOS" },
+  { concepto: "REGALIAS", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "REGALIAS ", parent: "REGALIAS" },
+  { concepto: "MKT", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "TOTAL ALQUILER EQUIPOS TECNICA", parent: "MKT" },
+  { concepto: "TOTAL TECNICOS", parent: "MKT" },
+  { concepto: "TOTAL SADAIC Y AADICAPIG", parent: "MKT" },
+  { concepto: "TOTAL OTROS GASTOS", parent: "MKT" },
+  { concepto: "TOTAL BAILARINAS", parent: "MKT" },
+  { concepto: "TOTAL REPARACION EQUIPOS SONIDO", parent: "MKT" },
+  { concepto: "TOTAL DJ Y BANDAS", parent: "MKT" },
+  { concepto: "TOTAL AGENCIAS", parent: "MKT" },
+  { concepto: "TOTAL PR", parent: "MKT" },
+  { concepto: "TOTAL FOTOGRAFIA", parent: "MKT" },
+  { concepto: "TOTAL VIDEO", parent: "MKT" },
+  { concepto: "DISEÑO REDES", parent: "MKT" },
+  { concepto: "DISEÑO MENU", parent: "MKT" },
+  { concepto: "GRAFICA PLOTEOS", parent: "MKT" },
+  { concepto: "GRAFICA/IMPRESIONES PAPEL/PLASTIFICADO", parent: "MKT" },
+  { concepto: "PAUTAS EN REDES", parent: "MKT" },
+  { concepto: "TOTAL MENSAJERIA", parent: "MKT" },
+  { concepto: "TOTAL PROGRAMADOR", parent: "MKT" },
+  { concepto: "TOTAL ACCIONES DE MARKETING", parent: "MKT" },
+  { concepto: "TOTAL TIKTOK", parent: "MKT" },
+  { concepto: "TOTAL MODERACION REDES", parent: "MKT" },
+  { concepto: "TOTAL OTROS GASTOS DE COMUNICACION", parent: "MKT" },
+  { concepto: "TOTAL PRENSA", parent: "MKT" },
+  { concepto: "TOTAL AMBIENTACION", parent: "MKT" },
+  { concepto: "TOTAL MERCADERIA SIN CARGO", parent: "MKT" },
+  { concepto: "TOTAL ACUERDOS COMERCIALES", parent: "MKT" },
+  { concepto: "TOTAL INVITACIONES", parent: "MKT" },
+  { concepto: "IMPUESTOS", parent: null, esSubtotal: true },
+  { concepto: "TOTAL ALQUILER Y EXPENSAS", parent: null, esGrupo: true, esSubtotal: true },
+  { concepto: "TOTAL SERVICIOS PUBLICOS", parent: null, esSubtotal: true },
+  { concepto: "ESTRUCTURA NG", parent: null, esSubtotal: true },
+  { concepto: "MARGEN DE GANANCIA ESTIMADO", parent: null, esSubtotal: true },
+];
+
+// Mapea imputación del archivo de gastos → concepto exacto del esqueleto matrix
+function conceptoDeImputacion(imp: string): string {
   const n = normalize(imp);
-  if (n === "dj") return "TOTAL DJ Y BANDAS";
-  if (n === "pr") return "TOTAL PR";
-  if (n === "bailarinas") return "TOTAL BAILARINAS";
-  if (n === "seguridad") return "TOTAL SEGURIDAD";
-  if (n === "seguridad intel") return "TOTAL SEGURIDAD INTELIGENCIA";
-  if (n === "bombero" || n === "bomberos") return "TOTAL BOMBEROS";
-  if (n === "portero" || n === "porteros") return "TOTAL PORTEROS";
-  if (n === "iluminador") return "TOTAL ILUMINACIÓN";
-  if (n === "vj") return "TOTAL VJ";
-  return "TOTAL " + imp.trim().toUpperCase();
+  const map: Record<string, string> = {
+    "dj": "TOTAL DJ Y BANDAS",
+    "pr": "TOTAL PR",
+    "bailarinas": "TOTAL BAILARINAS",
+    "seguridad": "TOTAL SEGURIDAD VIGILANTES",
+    "seguridad intel": "TOTAL INTELIGENCIA",
+    "inteligencia": "TOTAL INTELIGENCIA",
+    "portero": "PORTERO",
+    "porteros": "PORTERO",
+    "bombero": "OTROS GASTOS DE OPERACIÓN",
+    "bomberos": "OTROS GASTOS DE OPERACIÓN",
+    "iluminador": "TOTAL TECNICOS",
+    "vj": "TOTAL TECNICOS",
+    "tecnico": "TOTAL TECNICOS",
+    "tecnicos": "TOTAL TECNICOS",
+    "limpieza": "LIMPIEZA",
+    "valet": "TOTAL VALET PARKING",
+    "valet parking": "TOTAL VALET PARKING",
+    "fotografia": "TOTAL FOTOGRAFIA",
+    "video": "TOTAL VIDEO",
+    "prensa": "TOTAL PRENSA",
+    "ambientacion": "TOTAL AMBIENTACION",
+    "agencia": "TOTAL AGENCIAS",
+    "agencias": "TOTAL AGENCIAS",
+  };
+  return map[n] ?? "OTROS GASTOS DE OPERACIÓN";
 }
 
 function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
@@ -421,7 +530,7 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
       fecha: toISO(fx),
       concepto,
       imputacion: imp,
-      grupo: grupoDeImputacion(imp),
+      grupo: conceptoDeImputacion(imp),
       monto,
       semana: cSemana >= 0 ? String(row[cSemana] ?? "") : undefined,
       mes: cMes >= 0 ? String(row[cMes] ?? "") : undefined,
@@ -458,102 +567,49 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
   const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
   const excluded = new Set(excluidosDeTotal);
 
-  // Agrupar: grupo -> concepto -> porLocal
-  type Acc = { porLocal: Record<string, number>; total: number };
-  const groups = new Map<string, Map<string, Acc>>();
-  const groupTotals = new Map<string, Acc>();
-  for (const g of gastos) {
-    if (!groups.has(g.grupo)) {
-      groups.set(g.grupo, new Map());
-      groupTotals.set(g.grupo, { porLocal: {}, total: 0 });
-    }
-    const gMap = groups.get(g.grupo)!;
-    if (!gMap.has(g.concepto)) gMap.set(g.concepto, { porLocal: {}, total: 0 });
-    const acc = gMap.get(g.concepto)!;
-    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) acc.total += g.monto;
-    const gt = groupTotals.get(g.grupo)!;
-    gt.porLocal[g.local] = (gt.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) gt.total += g.monto;
-  }
-
-  // Orden de grupos: DJ, PR, BAILARINAS primero
-  const orderKey = (g: string) => {
-    if (/dj\s*y\s*bandas/i.test(g)) return 0;
-    if (/\bpr\b/i.test(g)) return 1;
-    if (/bailarinas/i.test(g)) return 2;
-    if (/seguridad(?!\s*intel)/i.test(g)) return 3;
-    if (/seguridad\s*intel/i.test(g)) return 4;
-    if (/portero/i.test(g)) return 5;
-    if (/bombero/i.test(g)) return 6;
-    return 10;
-  };
-  const groupNames = [...groups.keys()].sort(
-    (a, b) => orderKey(a) - orderKey(b) || a.localeCompare(b),
-  );
-
-  // Construir P&L con la MISMA ESTRUCTURA que MATRIX: esqueleto de secciones
-  // vacío, y solo completar los grupos de gastos que definió el usuario.
+  // Construir P&L con ESTRUCTURA COMPLETA de la matriz (todas las subcategorías,
+  // aunque estén vacías). Solo se completan las filas mapeadas desde gastos.
   const emptyPorLocal = (): Record<string, number> => {
     const o: Record<string, number> = {};
     for (const l of locales) o[l] = 0;
     return o;
   };
-  const emptyRow = (concepto: string, opts: Partial<PyLRow> = {}): PyLRow => ({
-    concepto,
-    porLocal: emptyPorLocal(),
-    total: 0,
-    ...opts,
-  });
 
-  // Estructura EXACTA de la matriz original (P&L_BY_LOCATION_MATRIX)
-  const pyl: PyLRow[] = [
-    emptyRow("TOTAL VENTA BRUTA", { esGrupo: true, esSubtotal: true }),
-    emptyRow("TOTAL INGRESOS", { esGrupo: true, esSubtotal: true }),
-    emptyRow("COMISIONES", { esGrupo: true, esSubtotal: true }),
-    emptyRow("CMV", { esSubtotal: true }),
-    emptyRow("COSTO LABORAL", { esGrupo: true, esSubtotal: true }),
-    emptyRow("GASTOS DE OPERACIÓN", { esGrupo: true, esSubtotal: true }),
-  ];
-
-  // Los grupos que definió el usuario (DJ, PR, BAILARINAS, ...) son hijos
-  // de GASTOS DE OPERACIÓN. Sumamos su total al padre.
-  const opPorLocal = emptyPorLocal();
-  let opTotal = 0;
-  const opChildren: PyLRow[] = [];
-  for (const gn of groupNames) {
-    const gt = groupTotals.get(gn)!;
-    const porLocal = { ...emptyPorLocal(), ...gt.porLocal };
-    opChildren.push({
-      concepto: gn,
-      grupo: "GASTOS DE OPERACIÓN",
-      porLocal,
-      total: gt.total,
-    });
-    opTotal += gt.total;
-    for (const [loc, v] of Object.entries(gt.porLocal)) {
-      opPorLocal[loc] = (opPorLocal[loc] ?? 0) + v;
-    }
+  // Aggregar gastos por concepto destino
+  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const g of gastos) {
+    const key = g.grupo; // ya mapeado a concepto del esqueleto
+    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
+    const acc = perConcepto.get(key)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
   }
-  // Completar la fila padre "GASTOS DE OPERACIÓN" con la suma
-  const opRow = pyl[pyl.length - 1];
-  opRow.porLocal = opPorLocal;
-  opRow.total = opTotal;
-  pyl.push(...opChildren);
 
-  // Continuar estructura de la matriz
-  pyl.push(
-    emptyRow("GASTOS DE MANTENIMIENTO", { esGrupo: true, esSubtotal: true }),
-    emptyRow("COMISIONES TC Y GASTOS BANCARIOS", { esGrupo: true, esSubtotal: true }),
-    emptyRow("HONORARIOS", { esGrupo: true, esSubtotal: true }),
-    emptyRow("REGALIAS", { esGrupo: true, esSubtotal: true }),
-    emptyRow("MKT", { esGrupo: true, esSubtotal: true }),
-    emptyRow("IMPUESTOS", { esSubtotal: true }),
-    emptyRow("TOTAL ALQUILER Y EXPENSAS", { esGrupo: true, esSubtotal: true }),
-    emptyRow("TOTAL SERVICIOS PUBLICOS", { esSubtotal: true }),
-    emptyRow("ESTRUCTURA NG", { esSubtotal: true }),
-    emptyRow("MARGEN DE GANANCIA ESTIMADO", { esSubtotal: true }),
-  );
+  // Sumas por padre (grupo) a partir de sus hijos
+  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const it of MATRIX_SKELETON) {
+    if (!it.parent) continue;
+    const acc = perConcepto.get(it.concepto);
+    if (!acc) continue;
+    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
+    const p = parentAgg.get(it.parent)!;
+    for (const [loc, v] of Object.entries(acc.porLocal)) {
+      p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
+    }
+    p.total += acc.total;
+  }
+
+  const pyl: PyLRow[] = MATRIX_SKELETON.map((it) => {
+    const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
+    return {
+      concepto: it.concepto,
+      grupo: it.parent ?? undefined,
+      porLocal: data?.porLocal ?? emptyPorLocal(),
+      total: data?.total ?? 0,
+      esGrupo: it.esGrupo,
+      esSubtotal: it.esSubtotal,
+    };
+  });
 
   // KPIs con la MISMA estructura que MATRIX, todo en 0
   const kpis: KPI[] = [
