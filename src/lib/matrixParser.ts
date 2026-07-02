@@ -85,6 +85,14 @@ export async function parseMatrix(file: File): Promise<MatrixData> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
+  // Router: si el archivo es la Base de Gastos, delegar.
+  if (wb.SheetNames.some((n) => /detalle/i.test(n)) &&
+      wb.SheetNames.some((n) => /resumen/i.test(n)) &&
+      !wb.SheetNames.some((n) => /^ventas?$/i.test(n))) {
+    const gastos = parseGastosWorkbook(wb, file);
+    if (gastos) return gastos;
+  }
+
   // Buscar hoja RESUMEN (la matriz consolidada por local).
   const sheetName =
     wb.SheetNames.find((n) => /resumen/i.test(n)) ??
