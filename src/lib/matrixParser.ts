@@ -337,11 +337,14 @@ function canonLocal(s: unknown): string {
     "crz recoleta": "CRUZA RECOLETA",
     "costa": "COSTA GRAL",
     "costa gral": "COSTA GRAL",
+    "costa 7070": "COSTA GRAL",
     "costa resto": "COSTA RESTO",
     "costa club": "COSTA CLUB",
     "milvidas": "MILVIDAS",
+    "mil vidas": "MILVIDAS",
     "kona": "KONA",
     "cochinchina": "COCHINCHINA",
+    "conchinchina": "COCHINCHINA",
     "comedor": "COMEDOR",
   };
   return map[n] ?? String(s ?? "").toUpperCase().trim();
