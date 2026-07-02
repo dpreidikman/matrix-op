@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, parseGastosDetallados, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,6 +48,7 @@ function Index() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loadedFileName, setLoadedFileName] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef2 = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -81,10 +82,10 @@ function Index() {
     return `${MES_LABELS[m - 1]} ${y}`;
   };
 
-  const handleFile = async (f?: File | null) => {
+  const handleFile = async (f?: File | null, kind: "auto" | "detallado" = "auto") => {
     if (!f) return;
     try {
-      const parsed = await parseMatrix(f);
+      const parsed = kind === "detallado" ? await parseGastosDetallados(f) : await parseMatrix(f);
       setRawData(parsed);
       // Auto-setear rango del período detectado
       if (parsed.gastos?.length) {
