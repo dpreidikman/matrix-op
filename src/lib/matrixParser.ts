@@ -46,6 +46,7 @@ export type MatrixData = {
   excluidosDeTotal?: LocalKey[];
   gastos?: GastoRow[];
   origen: MatrixOrigin;
+  skeleton?: SkelItem[];
 };
 
 export type GastoRow = {
@@ -336,11 +337,14 @@ function canonLocal(s: unknown): string {
     "crz recoleta": "CRUZA RECOLETA",
     "costa": "COSTA GRAL",
     "costa gral": "COSTA GRAL",
+    "costa 7070": "COSTA GRAL",
     "costa resto": "COSTA RESTO",
     "costa club": "COSTA CLUB",
     "milvidas": "MILVIDAS",
+    "mil vidas": "MILVIDAS",
     "kona": "KONA",
     "cochinchina": "COCHINCHINA",
+    "conchinchina": "COCHINCHINA",
     "comedor": "COMEDOR",
   };
   return map[n] ?? String(s ?? "").toUpperCase().trim();
@@ -348,7 +352,7 @@ function canonLocal(s: unknown): string {
 
 // Esqueleto EXACTO de la matriz P&L (RESUMEN). Cada entry: [concepto, parent|null]
 // parent === null → fila raíz (grupo o subtotal). parent !== null → hijo (subcategoría).
-type SkelItem = { concepto: string; parent: string | null; esGrupo?: boolean; esSubtotal?: boolean };
+export type SkelItem = { concepto: string; parent: string | null; esGrupo?: boolean; esSubtotal?: boolean };
 const MATRIX_SKELETON: SkelItem[] = [
   { concepto: "TOTAL VENTA BRUTA", parent: null, esSubtotal: true },
   { concepto: "TOTAL VENTA NETA", parent: null, esSubtotal: true },
@@ -688,7 +692,8 @@ export function filterMatrixByPeriod(
     if (!excluded.has(g.local)) acc.total += g.monto;
   }
   const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const it of MATRIX_SKELETON) {
+  const skel = base.skeleton ?? MATRIX_SKELETON;
+  for (const it of skel) {
     if (!it.parent) continue;
     const acc = perConcepto.get(it.concepto);
     if (!acc) continue;
@@ -697,7 +702,7 @@ export function filterMatrixByPeriod(
     for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
     p.total += acc.total;
   }
-  const pyl: PyLRow[] = MATRIX_SKELETON.map((it) => {
+  const pyl: PyLRow[] = skel.map((it) => {
     const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
     return {
       concepto: it.concepto,
@@ -709,6 +714,281 @@ export function filterMatrixByPeriod(
     };
   });
   return { ...base, pyl, gastos };
+}
+
+// -------------------- Parser Gastos Detallados (Fecha Servicio + Cat/Sub) --------------------
+
+// Categorías origen → etiqueta de subfila bajo "SIN CATEGORIA" cuando falta subcat
+const CAT_SIN_SUB_LABEL: Record<string, string> = {
+  "gtos mkt y publicidad": "MKT Y PUBLICIDAD S/CAT",
+  "gtos de operacion": "OPERACION S/CAT",
+  "gtos de operación": "OPERACION S/CAT",
+  "comisiones por venta": "COMISIONES POR VENTA S/CAT",
+  "cmv": "CMV S/CAT",
+  "honorarios": "HONORARIOS S/CAT",
+};
+
+// Mapea (Categoria, Sub-categoria) → concepto EXACTO del esqueleto matrix
+function mapCatSubToConcept(cat: string, sub: string | null | undefined): { concepto: string; parent?: string } {
+  const c = normalize(cat);
+  const s = sub ? normalize(sub).replace(/\s+/g, " ").trim() : "";
+
+  // Excepción: Mantenimiento → siempre MANTENIMIENTO LOCALES
+  if (/mantenimient/.test(c)) return { concepto: "MANTENIMIENTO LOCALES" };
+
+  // CMV directo
+  if (c === "cmv") {
+    if (!s) return { concepto: "CMV S/CAT", parent: "SIN CATEGORIA" };
+    return { concepto: "CMV" };
+  }
+
+  // Honorarios
+  if (/honorario/.test(c)) {
+    if (!s) return { concepto: "HONORARIOS S/CAT", parent: "SIN CATEGORIA" };
+    return { concepto: "TOTAL HONORARIOS" };
+  }
+
+  // Comisiones por venta
+  if (/comisiones\s*por\s*venta/.test(c)) {
+    if (!s) return { concepto: "COMISIONES POR VENTA S/CAT", parent: "SIN CATEGORIA" };
+    return { concepto: "Comisiones por venta" };
+  }
+
+  // Gtos Mkt y publicidad
+  if (/mkt|publicidad/.test(c)) {
+    if (!s) return { concepto: "MKT Y PUBLICIDAD S/CAT", parent: "SIN CATEGORIA" };
+    const mkt: Record<string, string> = {
+      "acciones de marketing": "TOTAL ACCIONES DE MARKETING",
+      "agencias": "TOTAL AGENCIAS",
+      "alquiler equipos tecnica": "TOTAL ALQUILER EQUIPOS TECNICA",
+      "diseno redes": "DISEÑO REDES",
+      "dj y bandas": "TOTAL DJ Y BANDAS",
+      "fotografia": "TOTAL FOTOGRAFIA",
+      "grafica ploteos": "GRAFICA PLOTEOS",
+      "grafica/impresiones papel/plastificado": "GRAFICA/IMPRESIONES PAPEL/PLASTIFICADO",
+      "otros gastos de comunicacion": "TOTAL OTROS GASTOS DE COMUNICACION",
+      "pautas en redes": "PAUTAS EN REDES",
+      "pr": "TOTAL PR",
+      "programador": "TOTAL PROGRAMADOR",
+      "reparacion equipos sonido": "TOTAL REPARACION EQUIPOS SONIDO",
+      "tecnicos": "TOTAL TECNICOS",
+      "tiktok": "TOTAL TIKTOK",
+      "video": "TOTAL VIDEO",
+      "prensa": "TOTAL PRENSA",
+      "ambientacion": "TOTAL AMBIENTACION",
+      "moderacion redes": "TOTAL MODERACION REDES",
+      "invitaciones": "TOTAL INVITACIONES",
+      "acuerdos comerciales": "TOTAL ACUERDOS COMERCIALES",
+      "mercaderia sin cargo": "TOTAL MERCADERIA SIN CARGO",
+      "diseno menu": "DISEÑO MENU",
+      "sadaic": "TOTAL SADAIC Y AADICAPIG",
+      "mensajeria": "TOTAL MENSAJERIA",
+      "otros gastos": "TOTAL OTROS GASTOS",
+    };
+    return { concepto: mkt[s] ?? "TOTAL OTROS GASTOS DE COMUNICACION" };
+  }
+
+  // Gtos de operación
+  if (/operacion/.test(c)) {
+    if (!s) return { concepto: "OPERACION S/CAT", parent: "SIN CATEGORIA" };
+    const op: Record<string, string> = {
+      "bazar & vajilla": "BAZAR & VAJILLA",
+      "bazar y vajilla": "BAZAR & VAJILLA",
+      "compras equipamiento electronico": "COMPRAS EQUIPAMIENTO ELECTRÓNICO",
+      "compras equipamiento gastronomico": "COMPRAS EQUIPAMIENTO GASTRONÓMICO",
+      "compras equipamientos": "COMPRAS EQUIPAMIENTOS",
+      "fletes": "FLETES",
+      "floreria": "OTROS GASTOS DE OPERACIÓN",
+      "lavadero": "TOTAL LAVADERO",
+      "otros gastos de operacion": "OTROS GASTOS DE OPERACIÓN",
+      "pulseras": "PULSERAS",
+      "uniformes": "UNIFORMES",
+      "valet parking": "TOTAL VALET PARKING",
+      "seguridad": "TOTAL SEGURIDAD VIGILANTES",
+      "inteligencia": "TOTAL INTELIGENCIA",
+      "portero": "PORTERO",
+      "limpieza": "LIMPIEZA",
+      "libreria": "LIBRERÍA",
+      "viaticos": "VIÁTICOS",
+      "seguros": "SEGUROS",
+      "velas": "TOTAL VELAS",
+      "parquizado": "TOTAL PARQUIZADO",
+      "catering": "CATERING",
+      "comida de personal": "COMIDA DE PERSONAL",
+      "validadores": "VALIDADORES",
+    };
+    return { concepto: op[s] ?? "OTROS GASTOS DE OPERACIÓN" };
+  }
+
+  // Fallback: si no se reconoce categoría → SIN CATEGORIA con etiqueta
+  const label = CAT_SIN_SUB_LABEL[c] ?? String(cat || "SIN DATO").toUpperCase() + " S/CAT";
+  return { concepto: label, parent: "SIN CATEGORIA" };
+}
+
+function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
+  // Buscar hoja/fila con cabeceras: Local | Fecha Servicio | Categoria | Sub-categoria | Monto Neto
+  let rows: unknown[][] = [];
+  let headerIdx = -1;
+  let header: unknown[] = [];
+  for (const sheetName of wb.SheetNames) {
+    const sr: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+      header: 1, defval: null, blankrows: false,
+    });
+    for (let r = 0; r < Math.min(sr.length, 20); r++) {
+      const cand = sr[r] ?? [];
+      const joined = cand.map((c) => normalize(c)).join("|");
+      if (/\blocal\b/.test(joined) && /fecha\s*servicio/.test(joined) && /categoria/.test(joined) && /sub-?categoria/.test(joined) && /monto/.test(joined)) {
+        rows = sr; headerIdx = r; header = cand; break;
+      }
+    }
+    if (headerIdx >= 0) break;
+  }
+  if (headerIdx < 0) return null;
+
+  const col = (re: RegExp) => header.findIndex((h) => re.test(normalize(h)));
+  const cLocal = col(/^local$/);
+  const cFechaSrv = col(/fecha\s*servicio/);
+  const cFechaPago = col(/fecha\s*pago/);
+  const cCat = col(/^categoria$/);
+  const cSub = col(/^sub-?categoria$/);
+  const cMontoN = col(/monto\s*neto/);
+  const cMontoB = col(/monto\s*bruto/);
+  const cDetalle = col(/detalle\s*servicio/);
+  const cProv = col(/proveedor/);
+  if (cLocal < 0 || cCat < 0 || cSub < 0 || (cMontoN < 0 && cMontoB < 0)) return null;
+
+  const gastos: GastoRow[] = [];
+  const localesSet = new Set<string>();
+  for (let r = headerIdx + 1; r < rows.length; r++) {
+    const row = rows[r] ?? [];
+    const local = canonLocal(row[cLocal]);
+    const cat = String(row[cCat] ?? "").trim();
+    const sub = row[cSub] == null ? "" : String(row[cSub]).trim();
+    const monto = num(row[cMontoN] ?? row[cMontoB]);
+    if (!local || !cat || !monto) continue;
+    const fsrv = toDate(row[cFechaSrv]);
+    const fpago = cFechaPago >= 0 ? toDate(row[cFechaPago]) : null;
+    const dest = mapCatSubToConcept(cat, sub || null);
+    localesSet.add(local);
+    gastos.push({
+      local,
+      fechaPago: toISO(fsrv), // fecha de servicio (para filtro por período)
+      fecha: fpago ? toISO(fpago) : undefined,
+      concepto: String(row[cDetalle] ?? cat),
+      imputacion: sub || cat,
+      grupo: dest.concepto,
+      monto,
+      alias: cProv >= 0 ? String(row[cProv] ?? "") : undefined,
+    });
+  }
+  if (!gastos.length) return null;
+
+  // Orden canónico de locales
+  const orden = [
+    "LA MALA","CRUZA POLO","CRUZA RECOLETA",
+    "COSTA RESTO","COSTA CLUB","COSTA GRAL",
+    "MILVIDAS","KONA","COCHINCHINA","COMEDOR",
+  ];
+  const extra = [...localesSet].filter((l) => !orden.includes(l));
+  const locales = [...orden, ...extra];
+  const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
+
+  // Skeleton: base + SIN CATEGORIA al final (grupos categoría origen)
+  const sinCatChildren = [
+    "MKT Y PUBLICIDAD S/CAT",
+    "OPERACION S/CAT",
+    "COMISIONES POR VENTA S/CAT",
+    "CMV S/CAT",
+    "HONORARIOS S/CAT",
+  ];
+  const skeleton: SkelItem[] = [
+    ...MATRIX_SKELETON,
+    { concepto: "SIN CATEGORIA", parent: null, esGrupo: true, esSubtotal: true },
+    ...sinCatChildren.map((c) => ({ concepto: c, parent: "SIN CATEGORIA" } as SkelItem)),
+  ];
+
+  const excluded = new Set(excluidosDeTotal);
+  const emptyPorLocal = (): Record<string, number> => {
+    const o: Record<string, number> = {};
+    for (const l of locales) o[l] = 0;
+    return o;
+  };
+
+  // Aggregar
+  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const g of gastos) {
+    const key = g.grupo;
+    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
+    const acc = perConcepto.get(key)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
+  }
+
+  // Sumas por padre
+  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const it of skeleton) {
+    if (!it.parent) continue;
+    const acc = perConcepto.get(it.concepto);
+    if (!acc) continue;
+    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
+    const p = parentAgg.get(it.parent)!;
+    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
+    p.total += acc.total;
+  }
+  const pyl: PyLRow[] = skeleton.map((it) => {
+    const d = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
+    return {
+      concepto: it.concepto,
+      grupo: it.parent ?? undefined,
+      porLocal: d?.porLocal ?? emptyPorLocal(),
+      total: d?.total ?? 0,
+      esGrupo: it.esGrupo,
+      esSubtotal: it.esSubtotal,
+    };
+  });
+
+  // Periodo desde la fecha de servicio más frecuente
+  let mes = "", anio: number | string = new Date().getFullYear();
+  const fs0 = gastos.map((g) => g.fechaPago).filter(Boolean).sort();
+  if (fs0.length) {
+    const d = toDate(fs0[0]);
+    if (d) { mes = MESES[d.getMonth()]; anio = d.getFullYear(); }
+  }
+
+  const detalle: DetalleRow[] = gastos.map((g) => ({
+    categoria: `${g.grupo} · ${g.fechaPago}`,
+    local: g.local,
+    proyectado: 0,
+    real: g.monto,
+    variacion: 0,
+  }));
+
+  const kpis: KPI[] = [
+    { label: "Venta Neta", value: 0 },
+    { label: "CMV", value: 0, pct: 0 },
+    { label: "Costo Laboral", value: 0, pct: 0 },
+    { label: "Margen Operativo", value: 0, pct: 0 },
+  ];
+
+  return {
+    periodo: { mes: mes || "—", anio },
+    locales,
+    kpis,
+    pyl,
+    detalle,
+    excluidosDeTotal,
+    gastos,
+    origen: "matrix",
+    skeleton,
+  };
+}
+
+export async function parseGastosDetallados(file: File): Promise<MatrixData> {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const parsed = parseGastosDetalladosWorkbook(wb, file);
+  if (!parsed) throw new Error("No se detectaron columnas esperadas (Local, Fecha Servicio, Categoria, Sub-categoria, Monto).");
+  return parsed;
 }
 
 // Demo data para mostrar el dashboard sin archivo cargado

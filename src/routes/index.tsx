@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, parseGastosDetallados, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,6 +48,7 @@ function Index() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loadedFileName, setLoadedFileName] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef2 = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -81,10 +82,10 @@ function Index() {
     return `${MES_LABELS[m - 1]} ${y}`;
   };
 
-  const handleFile = async (f?: File | null) => {
+  const handleFile = async (f?: File | null, kind: "auto" | "detallado" = "auto") => {
     if (!f) return;
     try {
-      const parsed = await parseMatrix(f);
+      const parsed = kind === "detallado" ? await parseGastosDetallados(f) : await parseMatrix(f);
       setRawData(parsed);
       // Auto-setear rango del período detectado
       if (parsed.gastos?.length) {
@@ -465,6 +466,16 @@ function Index() {
                   e.currentTarget.value = "";
                 }}
               />
+              <input
+                ref={inputRef2}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  void handleFile(e.target.files?.[0], "detallado");
+                  e.currentTarget.value = "";
+                }}
+              />
               <button
                 onClick={() => inputRef.current?.click()}
                 className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15 hover:ring-glow"
@@ -474,6 +485,18 @@ function Index() {
                   <Upload className="size-4" />
                   <span className="hidden sm:inline">CARGAR MATRIX / GASTOS</span>
                   <span className="sm:hidden">CARGAR</span>
+                </span>
+              </button>
+              <button
+                onClick={() => inputRef2.current?.click()}
+                className="group relative overflow-hidden rounded-lg border border-magenta/40 bg-magenta/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-magenta transition-all hover:bg-magenta/15"
+                title="Base de gastos con Fecha Servicio + Categoría/Sub-categoría"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-magenta/0 via-magenta/20 to-magenta/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                <span className="relative flex items-center gap-2">
+                  <Upload className="size-4" />
+                  <span className="hidden sm:inline">CARGAR GASTOS DETALLADOS</span>
+                  <span className="sm:hidden">DETALL.</span>
                 </span>
               </button>
             </div>
