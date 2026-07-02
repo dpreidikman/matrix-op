@@ -400,6 +400,24 @@ function Index() {
               {rawData.gastos?.length ? (
                 <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
                   <span className="opacity-60">Período</span>
+                  {availableMonths.length > 0 && (
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) { setPeriodFrom(""); setPeriodTo(""); return; }
+                        const [f, t] = monthRange(v);
+                        setPeriodFrom(f);
+                        setPeriodTo(t);
+                      }}
+                      className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+                    >
+                      <option value="">— Mes —</option>
+                      {availableMonths.map((m) => (
+                        <option key={m} value={m}>{monthLabel(m)}</option>
+                      ))}
+                    </select>
+                  )}
                   <input
                     type="date"
                     value={periodFrom}
@@ -413,6 +431,18 @@ function Index() {
                     onChange={(e) => setPeriodTo(e.target.value)}
                     className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
                   />
+                  <button
+                    onClick={() => {
+                      const anchor = periodFrom || periodTo || (availableMonths[availableMonths.length - 1] ? availableMonths[availableMonths.length - 1] + "-01" : "");
+                      if (!anchor) return;
+                      const [f, t] = monthRange(anchor.slice(0, 7));
+                      setPeriodFrom(f);
+                      setPeriodTo(t);
+                    }}
+                    className="text-[10px] px-2 py-1 border border-cyan/30 rounded text-cyan hover:bg-cyan/10"
+                  >
+                    MES COMPLETO
+                  </button>
                   <button
                     onClick={() => {
                       const dates = (rawData.gastos ?? []).map((g) => g.fechaPago).filter(Boolean).sort();
