@@ -84,6 +84,7 @@ function Index() {
   };
 
   const isGastos = data.origen === "gastos";
+  const hasGastos = !!data.gastos?.length;
   const excludedSet = new Set(data.excluidosDeTotal ?? []);
   const localesView =
     activeLocal === "ALL"
