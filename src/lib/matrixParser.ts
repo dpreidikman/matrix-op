@@ -692,7 +692,8 @@ export function filterMatrixByPeriod(
     if (!excluded.has(g.local)) acc.total += g.monto;
   }
   const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const it of MATRIX_SKELETON) {
+  const skel = base.skeleton ?? MATRIX_SKELETON;
+  for (const it of skel) {
     if (!it.parent) continue;
     const acc = perConcepto.get(it.concepto);
     if (!acc) continue;
@@ -701,7 +702,7 @@ export function filterMatrixByPeriod(
     for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
     p.total += acc.total;
   }
-  const pyl: PyLRow[] = MATRIX_SKELETON.map((it) => {
+  const pyl: PyLRow[] = skel.map((it) => {
     const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
     return {
       concepto: it.concepto,
