@@ -3,7 +3,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, parseGastosDetallados, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+
+const STORAGE_KEYS = {
+  matrix: "matrix:v1:matrix",
+  gastos: "matrix:v1:gastos",
+  name: "matrix:v1:filename",
+} as const;
+
+function loadPersisted(): { data: MatrixData; name: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const rawM = localStorage.getItem(STORAGE_KEYS.matrix);
+    const rawG = localStorage.getItem(STORAGE_KEYS.gastos);
+    const name = localStorage.getItem(STORAGE_KEYS.name) ?? "";
+    const m = rawM ? (JSON.parse(rawM) as MatrixData) : null;
+    const g = rawG ? (JSON.parse(rawG) as MatrixData) : null;
+    if (m && g) return { data: mergeMatrixData(m, g), name };
+    if (m) return { data: m, name };
+    if (g) return { data: g, name };
+  } catch (e) {
+    console.warn("persist load failed", e);
+  }
+  return null;
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,6 +59,20 @@ const fmtDate = (iso?: string) => {
 
 function Index() {
   const [rawData, setRawData] = useState<MatrixData>(demoData);
+  useEffect(() => {
+    const p = loadPersisted();
+    if (p) {
+      setRawData(p.data);
+      setLoadedFileName(p.name);
+      setActiveLocal("ALL");
+      setSelectedConcept(p.data.pyl.find((r) => !r.esGrupo)?.concepto ?? p.data.pyl[0]?.concepto ?? "");
+      if (p.data.gastos?.length) {
+        const dates = p.data.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
+        setPeriodFrom(dates[0] ?? "");
+        setPeriodTo(dates[dates.length - 1] ?? "");
+      }
+    }
+  }, []);
   const [periodFrom, setPeriodFrom] = useState<string>("");
   const [periodTo, setPeriodTo] = useState<string>("");
   const data = useMemo(
@@ -86,10 +123,28 @@ function Index() {
     if (!f) return;
     try {
       const parsed = kind === "detallado" ? await parseGastosDetallados(f) : await parseMatrix(f);
-      setRawData(parsed);
+      // Persistir en el slot correspondiente y mergear con el otro slot si existe
+      let combined: MatrixData = parsed;
+      try {
+        const slot = parsed.origen === "gastos" ? STORAGE_KEYS.gastos : STORAGE_KEYS.matrix;
+        const otherSlot = parsed.origen === "gastos" ? STORAGE_KEYS.matrix : STORAGE_KEYS.gastos;
+        localStorage.setItem(slot, JSON.stringify(parsed));
+        localStorage.setItem(STORAGE_KEYS.name, f.name);
+        const otherRaw = localStorage.getItem(otherSlot);
+        if (otherRaw) {
+          const other = JSON.parse(otherRaw) as MatrixData;
+          combined =
+            parsed.origen === "gastos"
+              ? mergeMatrixData(other, parsed)
+              : mergeMatrixData(parsed, other);
+        }
+      } catch (e) {
+        console.warn("persist save failed", e);
+      }
+      setRawData(combined);
       // Auto-setear rango del período detectado
-      if (parsed.gastos?.length) {
-        const dates = parsed.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
+      if (combined.gastos?.length) {
+        const dates = combined.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
         setPeriodFrom(dates[0] ?? "");
         setPeriodTo(dates[dates.length - 1] ?? "");
       } else {
@@ -99,7 +154,7 @@ function Index() {
       setActiveLocal("ALL");
       setCollapsed({});
       setLoadedFileName(f.name);
-      setSelectedConcept(parsed.pyl.find((p) => !p.esGrupo)?.concepto ?? parsed.pyl[0]?.concepto ?? "");
+      setSelectedConcept(combined.pyl.find((p) => !p.esGrupo)?.concepto ?? combined.pyl[0]?.concepto ?? "");
       toast.success(
         parsed.origen === "gastos"
           ? `Base de gastos cargada: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
