@@ -262,7 +262,9 @@ function Index() {
   const vinsonRangeKey = `${periodFrom}:${periodTo}`;
   const [vinsonBatchState, setVinsonBatchState] = useState({ key: vinsonRangeKey, batch: 0 });
   const vinsonBatch = vinsonBatchState.key === vinsonRangeKey ? vinsonBatchState.batch : 0;
-  const VINSON_BATCH_SIZE = 3;
+  // Vinson's backend returns "Object reference" (null pool) when hit concurrently
+  // for the same store. Fetch one day at a time so every valid day comes back.
+  const VINSON_BATCH_SIZE = 1;
 
   const vinsonQueries = useQueries({
     queries: vinsonDates.map((d, index) => ({
