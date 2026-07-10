@@ -60,33 +60,54 @@ export const getVinsonSales = createServerFn({ method: "POST" })
 
       const call = async () => {
         const token = await getToken();
-        return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        try {
+          return await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
       };
 
-      let res = await call();
-      if (res.status === 401 || res.status === 403) {
-        cachedToken = null;
-        res = await call();
-      }
+      try {
+        let res = await call();
+        if (res.status === 401 || res.status === 403) {
+          cachedToken = null;
+          res = await call();
+        }
 
-      if (!res.ok) {
-        const body = await res.text();
-        // The upstream API returns 400 + "Object reference not set to an
-        // instance of an object." for stores/dates it cannot resolve
-        // (e.g. tiendas migradas a VinsonPOS). Treat as "no data" instead
-        // of a hard error so the UI stays usable.
-        if (res.status === 400 && /Object reference/i.test(body)) {
+        if (!res.ok) {
+          const body = await res.text();
+          // Vinson reports missing days and temporary database-pool exhaustion
+          // as 400 responses. Neither should take down the whole dashboard.
+          if (
+            res.status === 400 &&
+            /Object reference|Timeout expired|connection from the pool|max pool size/i.test(body)
+          ) {
+            return {
+              shifts: [],
+              warning: /Timeout expired|connection from the pool|max pool size/i.test(body)
+                ? "Vinson está temporalmente ocupado; este día no pudo cargarse."
+                : "La API no devolvió datos para esta tienda/fecha.",
+            };
+          }
+          throw new Error(`Sales fetch failed [${res.status}]: ${body}`);
+        }
+
+        const shifts = (await res.json()) as VinsonShift[];
+        return { shifts };
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
           return {
             shifts: [],
-            warning:
-              "La API no devolvió datos para esta tienda/fecha (posible tienda sin operación en ese día).",
+            warning: "Vinson demoró demasiado; este día no pudo cargarse.",
           };
         }
-        throw new Error(`Sales fetch failed [${res.status}]: ${body}`);
+        throw error;
       }
-
-      const shifts = (await res.json()) as VinsonShift[];
-      return { shifts };
     },
   );
 
