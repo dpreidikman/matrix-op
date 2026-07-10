@@ -89,3 +89,69 @@ export const getVinsonSales = createServerFn({ method: "POST" })
       return { shifts };
     },
   );
+
+function* eachDate(fromIso: string, toIso: string) {
+  const start = new Date(`${fromIso}T00:00:00`);
+  const end = new Date(`${toIso}T00:00:00`);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    yield `${y}-${m}-${day}`;
+  }
+}
+
+export const getVinsonSalesRange = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      idTienda: z.number().int().positive(),
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  )
+  .handler(
+    async ({ data }): Promise<{ total: number; days: number; missing: number }> => {
+      const dates: string[] = [];
+      for (const d of eachDate(data.from, data.to)) dates.push(d);
+      // Cap to avoid runaway loops
+      const bounded = dates.slice(0, 400);
+
+      let total = 0;
+      let missing = 0;
+
+      const call = async (dateIso: string) => {
+        const url = `${BASE}/api/Sales/GetSalesPerStorePerShift/${data.idTienda}/${toApiDate(dateIso)}`;
+        const doFetch = async () => {
+          const token = await getToken();
+          return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        };
+        let res = await doFetch();
+        if (res.status === 401 || res.status === 403) {
+          cachedToken = null;
+          res = await doFetch();
+        }
+        if (!res.ok) {
+          const body = await res.text();
+          if (res.status === 400 && /Object reference/i.test(body)) return null;
+          throw new Error(`Sales fetch failed [${res.status}] on ${dateIso}: ${body}`);
+        }
+        return (await res.json()) as VinsonShift[];
+      };
+
+      // Limit concurrency to avoid hammering the API
+      const CONCURRENCY = 6;
+      for (let i = 0; i < bounded.length; i += CONCURRENCY) {
+        const chunk = bounded.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(chunk.map((d) => call(d).catch(() => null)));
+        for (const r of results) {
+          if (!r) {
+            missing++;
+            continue;
+          }
+          for (const s of r) total += Number(s.sale ?? 0);
+        }
+      }
+
+      return { total, days: bounded.length, missing };
+    },
+  );
