@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, Database } from "lucide-react";
@@ -51,6 +51,43 @@ function VinsonPage() {
     queryFn: () => fetchHistory({ data: { storeId } }),
     staleTime: 30_000,
   });
+
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of historyQuery.data?.rows ?? []) {
+      if (/^\d{4}-\d{2}/.test(r.date)) set.add(r.date.slice(0, 7));
+    }
+    return [...set].sort();
+  }, [historyQuery.data]);
+
+  const monthRange = (ym: string): [string, string] => {
+    const [y, m] = ym.split("-").map(Number);
+    const first = `${ym}-01`;
+    const last = new Date(y, m, 0).getDate();
+    return [first, `${ym}-${String(last).padStart(2, "0")}`];
+  };
+
+  const selectedMonth =
+    periodFrom && periodTo && periodFrom.slice(0, 7) === periodTo.slice(0, 7)
+      ? periodFrom.slice(0, 7)
+      : "";
+
+  const MES_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return `${MES_LABELS[m - 1]} ${y}`;
+  };
+
+  const filtered = useMemo(() => {
+    const rows = (historyQuery.data?.rows ?? []).filter(
+      (r) => (!periodFrom || r.date >= periodFrom) && (!periodTo || r.date <= periodTo),
+    );
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    return { rows, total };
+  }, [historyQuery.data, periodFrom, periodTo]);
 
   function isoAdd(iso: string, days: number) {
     const d = new Date(`${iso}T00:00:00Z`);
