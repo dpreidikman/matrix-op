@@ -89,8 +89,9 @@ function Index() {
   const [loadedFileName, setLoadedFileName] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -256,14 +257,38 @@ function Index() {
     return out.slice(0, 62);
   }, [periodFrom, periodTo]);
 
+  // Vinson's database pool cannot handle a whole month requested at once.
+  // Load three days at a time and open the next batch only when this one ends.
+  const vinsonRangeKey = `${periodFrom}:${periodTo}`;
+  const [vinsonBatchState, setVinsonBatchState] = useState({ key: vinsonRangeKey, batch: 0 });
+  const vinsonBatch = vinsonBatchState.key === vinsonRangeKey ? vinsonBatchState.batch : 0;
+  const VINSON_BATCH_SIZE = 3;
+
   const vinsonQueries = useQueries({
-    queries: vinsonDates.map((d) => ({
+    queries: vinsonDates.map((d, index) => ({
       queryKey: ["vinson", "day", 643, d],
       queryFn: () => fetchVinsonDay({ data: { idTienda: 643, date: d } }),
+      enabled: index < (vinsonBatch + 1) * VINSON_BATCH_SIZE,
       staleTime: 10 * 60_000,
-      retry: 1,
+      retry: false,
     })),
   });
+  useEffect(() => {
+    if (vinsonBatchState.key !== vinsonRangeKey) {
+      setVinsonBatchState({ key: vinsonRangeKey, batch: 0 });
+      return;
+    }
+    const start = vinsonBatch * VINSON_BATCH_SIZE;
+    const end = Math.min(start + VINSON_BATCH_SIZE, vinsonDates.length);
+    if (start >= end) return;
+    const currentBatch = vinsonQueries.slice(start, end);
+    const settled = currentBatch.length === end - start && currentBatch.every((q) => q.isSuccess || q.isError);
+    if (settled && end < vinsonDates.length) {
+      setVinsonBatchState((current) =>
+        current.key === vinsonRangeKey ? { ...current, batch: current.batch + 1 } : current,
+      );
+    }
+  }, [vinsonBatch, vinsonBatchState.key, vinsonDates.length, vinsonQueries, vinsonRangeKey]);
   const vinsonMala = useMemo(() => {
     const total = vinsonQueries.reduce((acc, q) => {
       const shifts = q.data?.shifts ?? [];
@@ -505,7 +530,7 @@ function Index() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
-                {isGastos ? "Base de gastos · imputaciones por local" : "Consolidated P&L · drill-down activo"} · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
+                {isGastos ? "Base de gastos · imputaciones por local" : "Consolidated P&L · drill-down activo"} · refresh {now ? now.toLocaleTimeString("es-AR", { hour12: false }) : "--:--:--"}
               </p>
               {loadedFileName && (
                 <p className="mt-1 text-[10px] text-cyan/70 font-mono uppercase tracking-[0.18em]">
