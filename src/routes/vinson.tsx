@@ -6,10 +6,8 @@ import { Activity, Menu, X, RefreshCw, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
-  getVinsonSales,
   getVinsonHistory,
   syncVinsonRange,
-  type VinsonShift,
 } from "@/lib/vinson.functions";
 
 const STORES = [
@@ -42,10 +40,8 @@ function todayIso() {
 function VinsonPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeId, setStoreId] = useState<number>(STORES[0].id);
-  const [date, setDate] = useState<string>(todayIso());
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string>("");
-  const fetchSales = useServerFn(getVinsonSales);
   const runSync = useServerFn(syncVinsonRange);
   const fetchHistory = useServerFn(getVinsonHistory);
   const queryClient = useQueryClient();
@@ -54,26 +50,6 @@ function VinsonPage() {
     queryKey: ["vinson", "history", storeId],
     queryFn: () => fetchHistory({ data: { storeId } }),
     staleTime: 30_000,
-  });
-
-  const historyByMonth = useMemo(() => {
-    const rows = historyQuery.data?.rows ?? [];
-    const groups = new Map<string, { total: number; days: number }>();
-    for (const r of rows) {
-      const key = r.date.slice(0, 7);
-      const g = groups.get(key) ?? { total: 0, days: 0 };
-      g.total += r.total;
-      g.days += 1;
-      groups.set(key, g);
-    }
-    return Array.from(groups.entries())
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .map(([month, v]) => ({ month, total: v.total, days: v.days }));
-  }, [historyQuery.data]);
-
-  const mutation = useMutation({
-    mutationFn: () => fetchSales({ data: { idTienda: storeId, date } }),
-    onError: (e: Error) => toast.error(e.message),
   });
 
   function isoAdd(iso: string, days: number) {
@@ -88,15 +64,14 @@ function VinsonPage() {
     setSyncMsg("Iniciando…");
     try {
       const today = todayIso();
-      const yesterday = isoAdd(today, -1);
       let cursor = "2026-01-01";
       let totalSynced = 0;
       let totalSkipped = 0;
       let totalFailed = 0;
       const CHUNK = 20;
-      while (cursor <= yesterday) {
+      while (cursor <= today) {
         const chunkEnd = isoAdd(cursor, CHUNK - 1);
-        const to = chunkEnd > yesterday ? yesterday : chunkEnd;
+        const to = chunkEnd > today ? today : chunkEnd;
         setSyncMsg(`Sincronizando ${cursor} → ${to} (${totalSynced} guardados)`);
         const r = await runSync({ data: { storeId, from: cursor, to } });
         totalSynced += r.synced;
@@ -117,8 +92,6 @@ function VinsonPage() {
     }
   }
 
-  const shifts: VinsonShift[] = mutation.data?.shifts ?? [];
-  const total = shifts.reduce((acc, s) => acc + Number(s.sale ?? 0), 0);
   const store = STORES.find((s) => s.id === storeId);
 
   return (
@@ -227,30 +200,11 @@ function VinsonPage() {
             </div>
 
             <div className="flex items-end gap-2">
-              <div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
-                  Fecha
-                </div>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="rounded-md border border-white/10 bg-panel/60 px-3 py-2 text-sm font-mono"
-                />
-              </div>
-              <button
-                onClick={() => mutation.mutate()}
-                disabled={mutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-cyan/20 border border-cyan/40 px-4 py-2 text-sm font-medium text-cyan hover:bg-cyan/30 disabled:opacity-50"
-              >
-                <RefreshCw className={`size-4 ${mutation.isPending ? "animate-spin" : ""}`} />
-                Consultar
-              </button>
               <button
                 onClick={backfill2026}
                 disabled={syncing}
                 className="inline-flex items-center gap-2 rounded-md bg-magenta/20 border border-magenta/40 px-4 py-2 text-sm font-medium text-magenta hover:bg-magenta/30 disabled:opacity-50"
-                title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta ayer"
+                title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta hoy"
               >
                 <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
                 {syncing ? "Sincronizando…" : "Backfill 2026"}
@@ -265,66 +219,6 @@ function VinsonPage() {
           )}
 
           <section className="rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <div className="font-display text-sm tracking-widest text-muted-foreground">
-                TURNOS · {date}
-              </div>
-              <div className="font-mono text-sm text-cyan">
-                TOTAL {fmtMoney(total)}
-              </div>
-            </div>
-
-            {mutation.isPending && (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                Cargando…
-              </div>
-            )}
-
-            {!mutation.isPending && mutation.isError && (
-              <div className="px-5 py-6 text-sm text-magenta">
-                {(mutation.error as Error).message}
-              </div>
-            )}
-
-            {!mutation.isPending && !mutation.isError && shifts.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                {mutation.isSuccess
-                  ? (mutation.data?.warning ?? "Sin datos para esa fecha.")
-                  : "Elegí una fecha y presioná Consultar."}
-              </div>
-            )}
-
-            {shifts.length > 0 && (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                    <th className="px-5 py-3">Turno</th>
-                    <th className="px-5 py-3">Fecha</th>
-                    <th className="px-5 py-3 text-right">Venta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shifts.map((s, i) => (
-                    <tr key={i} className="border-t border-white/5">
-                      <td className="px-5 py-3">{s.shift}</td>
-                      <td className="px-5 py-3 font-mono text-muted-foreground">{s.date}</td>
-                      <td className="px-5 py-3 text-right font-mono text-cyan">
-                        {fmtMoney(Number(s.sale))}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-white/10 bg-white/5">
-                    <td className="px-5 py-3 font-medium" colSpan={2}>Total</td>
-                    <td className="px-5 py-3 text-right font-mono text-cyan font-medium">
-                      {fmtMoney(total)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </section>
-
-          <section className="mt-6 rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <div className="font-display text-sm tracking-widest text-muted-foreground">
                 HISTÓRICO EN BASE · {store?.name}
@@ -348,26 +242,8 @@ function VinsonPage() {
               </div>
             )}
 
-            {historyByMonth.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
-                {historyByMonth.map((m) => (
-                  <div
-                    key={m.month}
-                    className="rounded-md border border-white/10 bg-white/5 p-4"
-                  >
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                      {m.month} · {m.days} días
-                    </div>
-                    <div className="mt-1 font-mono text-lg text-cyan">
-                      {fmtMoney(m.total)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {(historyQuery.data?.rows.length ?? 0) > 0 && (
-              <div className="max-h-[420px] overflow-auto border-t border-white/10">
+              <div className="max-h-[420px] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-panel/95 backdrop-blur">
                     <tr className="text-left text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
