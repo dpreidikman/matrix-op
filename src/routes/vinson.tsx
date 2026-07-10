@@ -201,7 +201,9 @@ function VinsonPage() {
 
             {!mutation.isPending && !mutation.isError && shifts.length === 0 && (
               <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                {mutation.isSuccess ? "Sin datos para esa fecha." : "Elegí una fecha y presioná Consultar."}
+                {mutation.isSuccess
+                  ? (mutation.data?.warning ?? "Sin datos para esa fecha.")
+                  : "Elegí una fecha y presioná Consultar."}
               </div>
             )}
 
