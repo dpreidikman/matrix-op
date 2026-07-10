@@ -9,8 +9,8 @@ export const Route = createFileRoute("/api/public/hooks/vinson-daily")({
         if (!expected || apikey !== expected) {
           return new Response("Unauthorized", { status: 401 });
         }
-        const { cronSyncYesterday } = await import("@/lib/vinson.functions");
-        const result = await cronSyncYesterday();
+        const { runVinsonDailyCron } = await import("@/lib/vinson-cron.server");
+        const result = await runVinsonDailyCron();
         return Response.json(result);
       },
     },

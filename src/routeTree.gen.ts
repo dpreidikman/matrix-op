@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinsonRouteImport } from './routes/vinson'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHooksVinsonDailyRouteImport } from './routes/api/public/hooks/vinson-daily'
 
 const VinsonRoute = VinsonRouteImport.update({
   id: '/vinson',
@@ -22,31 +23,41 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksVinsonDailyRoute =
+  ApiPublicHooksVinsonDailyRouteImport.update({
+    id: '/api/public/hooks/vinson-daily',
+    path: '/api/public/hooks/vinson-daily',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/vinson': typeof VinsonRoute
+  '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/vinson': typeof VinsonRoute
+  '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/vinson': typeof VinsonRoute
+  '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/vinson'
+  fullPaths: '/' | '/vinson' | '/api/public/hooks/vinson-daily'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/vinson'
-  id: '__root__' | '/' | '/vinson'
+  to: '/' | '/vinson' | '/api/public/hooks/vinson-daily'
+  id: '__root__' | '/' | '/vinson' | '/api/public/hooks/vinson-daily'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   VinsonRoute: typeof VinsonRoute
+  ApiPublicHooksVinsonDailyRoute: typeof ApiPublicHooksVinsonDailyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +76,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/vinson-daily': {
+      id: '/api/public/hooks/vinson-daily'
+      path: '/api/public/hooks/vinson-daily'
+      fullPath: '/api/public/hooks/vinson-daily'
+      preLoaderRoute: typeof ApiPublicHooksVinsonDailyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   VinsonRoute: VinsonRoute,
+  ApiPublicHooksVinsonDailyRoute: ApiPublicHooksVinsonDailyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
