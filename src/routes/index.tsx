@@ -239,66 +239,22 @@ function Index() {
 
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
-  // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
-  // Vinson: fetch one day at a time (cada request corre en su propio worker,
-  // así evitamos el límite de CPU por request cuando el rango es de un mes).
-  const fetchVinsonDay = useServerFn(getVinsonSales);
-  const vinsonDates = useMemo(() => {
-    if (!periodFrom || !periodTo) return [] as string[];
-    const out: string[] = [];
-    const start = new Date(`${periodFrom}T00:00:00`);
-    const end = new Date(`${periodTo}T00:00:00`);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      out.push(`${y}-${m}-${dd}`);
-    }
-    return out.slice(0, 62);
-  }, [periodFrom, periodTo]);
-
-  // Vinson's database pool cannot handle a whole month requested at once.
-  // Load three days at a time and open the next batch only when this one ends.
-  const vinsonRangeKey = `${periodFrom}:${periodTo}`;
-  const [vinsonBatchState, setVinsonBatchState] = useState({ key: vinsonRangeKey, batch: 0 });
-  const vinsonBatch = vinsonBatchState.key === vinsonRangeKey ? vinsonBatchState.batch : 0;
-  // Vinson's backend returns "Object reference" (null pool) when hit concurrently
-  // for the same store. Fetch one day at a time so every valid day comes back.
-  const VINSON_BATCH_SIZE = 1;
-
-  const vinsonQueries = useQueries({
-    queries: vinsonDates.map((d, index) => ({
-      queryKey: ["vinson", "day", 643, d],
-      queryFn: () => fetchVinsonDay({ data: { idTienda: 643, date: d } }),
-      enabled: index < (vinsonBatch + 1) * VINSON_BATCH_SIZE,
-      staleTime: 10 * 60_000,
-      retry: false,
-    })),
+  // Vinson: read cached daily totals from DB (populated by cron + manual sync).
+  const fetchCached = useServerFn(getVinsonCachedRange);
+  const vinsonQuery = useQuery({
+    queryKey: ["vinson", "cached", 643, periodFrom, periodTo],
+    queryFn: () => fetchCached({ data: { storeId: 643, from: periodFrom, to: periodTo } }),
+    enabled: Boolean(periodFrom && periodTo),
+    staleTime: 60_000,
   });
-  useEffect(() => {
-    if (vinsonBatchState.key !== vinsonRangeKey) {
-      setVinsonBatchState({ key: vinsonRangeKey, batch: 0 });
-      return;
-    }
-    const start = vinsonBatch * VINSON_BATCH_SIZE;
-    const end = Math.min(start + VINSON_BATCH_SIZE, vinsonDates.length);
-    if (start >= end) return;
-    const currentBatch = vinsonQueries.slice(start, end);
-    const settled = currentBatch.length === end - start && currentBatch.every((q) => q.isSuccess || q.isError);
-    if (settled && end < vinsonDates.length) {
-      setVinsonBatchState((current) =>
-        current.key === vinsonRangeKey ? { ...current, batch: current.batch + 1 } : current,
-      );
-    }
-  }, [vinsonBatch, vinsonBatchState.key, vinsonDates.length, vinsonQueries, vinsonRangeKey]);
   const vinsonMala = useMemo(() => {
-    const total = vinsonQueries.reduce((acc, q) => {
-      const shifts = q.data?.shifts ?? [];
-      return acc + shifts.reduce((s, sh) => s + Number(sh.sale ?? 0), 0);
-    }, 0);
-    const isFetching = vinsonQueries.some((q) => q.isFetching);
-    return { total, isFetching, hasAny: vinsonQueries.some((q) => q.data) };
-  }, [vinsonQueries]);
+    const total = vinsonQuery.data?.total ?? 0;
+    return {
+      total,
+      isFetching: vinsonQuery.isFetching,
+      missing: vinsonQuery.data?.missingDates.length ?? 0,
+    };
+  }, [vinsonQuery.data, vinsonQuery.isFetching]);
 
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
