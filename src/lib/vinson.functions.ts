@@ -123,7 +123,16 @@ export const getVinsonSalesRange = createServerFn({ method: "POST" })
         const url = `${BASE}/api/Sales/GetSalesPerStorePerShift/${data.idTienda}/${toApiDate(dateIso)}`;
         const doFetch = async () => {
           const token = await getToken();
-          return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 8000);
+          try {
+            return await fetch(url, {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: ctrl.signal,
+            });
+          } finally {
+            clearTimeout(timer);
+          }
         };
         let res = await doFetch();
         if (res.status === 401 || res.status === 403) {
@@ -138,11 +147,13 @@ export const getVinsonSalesRange = createServerFn({ method: "POST" })
         return (await res.json()) as VinsonShift[];
       };
 
-      // Limit concurrency to avoid hammering the API
-      const CONCURRENCY = 6;
+      // Higher concurrency + per-request timeout so slow days don't stall the whole range
+      const CONCURRENCY = 10;
       for (let i = 0; i < bounded.length; i += CONCURRENCY) {
         const chunk = bounded.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(chunk.map((d) => call(d).catch(() => null)));
+        const results = await Promise.all(
+          chunk.map((d) => call(d).catch((e) => { console.warn("[vinson] day failed", d, e?.message); return null; })),
+        );
         for (const r of results) {
           if (!r) {
             missing++;
@@ -152,6 +163,7 @@ export const getVinsonSalesRange = createServerFn({ method: "POST" })
         }
       }
 
+      console.log(`[vinson] range ${data.idTienda} ${data.from}→${data.to}: total=${total} days=${bounded.length} missing=${missing}`);
       return { total, days: bounded.length, missing };
     },
   );
