@@ -4,9 +4,9 @@ import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getVinsonSalesRange } from "@/lib/vinson.functions";
+import { getVinsonSales } from "@/lib/vinson.functions";
 
 const STORAGE_KEYS = {
   auto: "matrix:v1:auto",
@@ -239,13 +239,39 @@ function Index() {
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
   // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
-  const fetchVinsonRange = useServerFn(getVinsonSalesRange);
-  const vinsonMala = useQuery({
-    queryKey: ["vinson", "range", 643, periodFrom, periodTo],
-    queryFn: () => fetchVinsonRange({ data: { idTienda: 643, from: periodFrom, to: periodTo } }),
-    enabled: !!periodFrom && !!periodTo,
-    staleTime: 5 * 60_000,
+  // Vinson: fetch one day at a time (cada request corre en su propio worker,
+  // así evitamos el límite de CPU por request cuando el rango es de un mes).
+  const fetchVinsonDay = useServerFn(getVinsonSales);
+  const vinsonDates = useMemo(() => {
+    if (!periodFrom || !periodTo) return [] as string[];
+    const out: string[] = [];
+    const start = new Date(`${periodFrom}T00:00:00`);
+    const end = new Date(`${periodTo}T00:00:00`);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${dd}`);
+    }
+    return out.slice(0, 62);
+  }, [periodFrom, periodTo]);
+
+  const vinsonQueries = useQueries({
+    queries: vinsonDates.map((d) => ({
+      queryKey: ["vinson", "day", 643, d],
+      queryFn: () => fetchVinsonDay({ data: { idTienda: 643, date: d } }),
+      staleTime: 10 * 60_000,
+      retry: 1,
+    })),
   });
+  const vinsonMala = useMemo(() => {
+    const total = vinsonQueries.reduce((acc, q) => {
+      const shifts = q.data?.shifts ?? [];
+      return acc + shifts.reduce((s, sh) => s + Number(sh.sale ?? 0), 0);
+    }, 0);
+    const isFetching = vinsonQueries.some((q) => q.isFetching);
+    return { total, isFetching, hasAny: vinsonQueries.some((q) => q.data) };
+  }, [vinsonQueries]);
 
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
@@ -268,8 +294,8 @@ function Index() {
       const segSum = f + nf + o;
       let real = tvb?.porLocal[loc] ?? segSum;
       let fromVinson = false;
-      if (/la\s*mala/i.test(loc) && vinsonMala.data && vinsonMala.data.total > 0) {
-        real = vinsonMala.data.total;
+      if (/la\s*mala/i.test(loc) && (vinsonMala.total > 0 || vinsonMala.isFetching)) {
+        real = vinsonMala.total;
         fromVinson = true;
       }
       const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
@@ -279,7 +305,7 @@ function Index() {
       return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson };
     });
     return { rows };
-  }, [data, activeLocal, vinsonMala.data]);
+  }, [data, activeLocal, vinsonMala]);
 
   const gastosResumen = useMemo(() => {
     const rows = data.pyl
