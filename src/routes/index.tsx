@@ -877,7 +877,12 @@ function Index() {
                         <div className="grid grid-cols-3 gap-5 shrink-0 w-[460px]">
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Total Venta Bruta</div>
-                            <div className="font-display text-base font-bold text-foreground tabular-nums">{fmtMoney(r.real)}</div>
+                            <div className={`font-display text-base font-bold tabular-nums ${r.fromVinson ? "text-cyan" : "text-foreground"}`}>
+                              {r.fromVinson && vinsonMala.isFetching ? "…" : fmtMoney(r.real)}
+                            </div>
+                            {r.fromVinson && (
+                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">Vinson · 643</div>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Proyectado</div>
