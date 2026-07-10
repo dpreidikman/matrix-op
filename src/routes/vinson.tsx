@@ -7,7 +7,12 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { getVinsonSales, type VinsonShift } from "@/lib/vinson.functions";
 
-const STORES = [{ id: 643, name: "La Mala" }] as const;
+const STORES = [
+  { id: 643, name: "La Mala" },
+  { id: 695, name: "Costa 7070" },
+  { id: 73, name: "Narda Comedor" },
+  { id: 363, name: "Kona" },
+] as const;
 
 export const Route = createFileRoute("/vinson")({
   head: () => ({
