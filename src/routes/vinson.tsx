@@ -323,6 +323,89 @@ function VinsonPage() {
               </table>
             )}
           </section>
+
+          <section className="mt-6 rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <div className="font-display text-sm tracking-widest text-muted-foreground">
+                HISTÓRICO EN BASE · {store?.name}
+              </div>
+              <div className="font-mono text-sm text-cyan">
+                {historyQuery.data
+                  ? `${historyQuery.data.rows.length} días · ${fmtMoney(historyQuery.data.total)}`
+                  : "cargando…"}
+              </div>
+            </div>
+
+            {historyQuery.isLoading && (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Cargando histórico…
+              </div>
+            )}
+
+            {!historyQuery.isLoading && (historyQuery.data?.rows.length ?? 0) === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Sin datos guardados. Corré Backfill 2026 para poblar la base.
+              </div>
+            )}
+
+            {historyByMonth.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+                {historyByMonth.map((m) => (
+                  <div
+                    key={m.month}
+                    className="rounded-md border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      {m.month} · {m.days} días
+                    </div>
+                    <div className="mt-1 font-mono text-lg text-cyan">
+                      {fmtMoney(m.total)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(historyQuery.data?.rows.length ?? 0) > 0 && (
+              <div className="max-h-[420px] overflow-auto border-t border-white/10">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-panel/95 backdrop-blur">
+                    <tr className="text-left text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      <th className="px-5 py-3">Fecha</th>
+                      <th className="px-5 py-3 text-right">Venta</th>
+                      <th className="px-5 py-3 text-right">Acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const asc = [...(historyQuery.data?.rows ?? [])].sort((a, b) =>
+                        a.date < b.date ? -1 : 1,
+                      );
+                      let running = 0;
+                      const rendered = asc.map((r) => {
+                        running += r.total;
+                        return { ...r, running };
+                      });
+                      return rendered
+                        .slice()
+                        .reverse()
+                        .map((r) => (
+                          <tr key={r.date} className="border-t border-white/5">
+                            <td className="px-5 py-2 font-mono text-muted-foreground">{r.date}</td>
+                            <td className="px-5 py-2 text-right font-mono text-cyan">
+                              {fmtMoney(r.total)}
+                            </td>
+                            <td className="px-5 py-2 text-right font-mono text-foreground">
+                              {fmtMoney(r.running)}
+                            </td>
+                          </tr>
+                        ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </main>
       </div>
     </div>
