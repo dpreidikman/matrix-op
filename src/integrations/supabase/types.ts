@@ -14,7 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      vinson_daily_sales: {
+        Row: {
+          date: string
+          shifts: Json
+          store_id: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          date: string
+          shifts?: Json
+          store_id: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          date?: string
+          shifts?: Json
+          store_id?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
