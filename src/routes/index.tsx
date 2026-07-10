@@ -498,8 +498,7 @@ function Index() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {rawData.gastos?.length ? (
-                <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
+              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
                   <span className="opacity-60">Período</span>
                   {availableMonths.length > 0 && (
                     <select
@@ -554,8 +553,7 @@ function Index() {
                   >
                     RESET
                   </button>
-                </div>
-              ) : null}
+              </div>
               <input
                 ref={inputRef}
                 type="file"
