@@ -4,6 +4,9 @@ import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getVinsonSalesRange } from "@/lib/vinson.functions";
 
 const STORAGE_KEYS = {
   auto: "matrix:v1:auto",
@@ -236,6 +239,14 @@ function Index() {
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
   // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
+  const fetchVinsonRange = useServerFn(getVinsonSalesRange);
+  const vinsonMala = useQuery({
+    queryKey: ["vinson", "range", 643, periodFrom, periodTo],
+    queryFn: () => fetchVinsonRange({ data: { idTienda: 643, from: periodFrom, to: periodTo } }),
+    enabled: !!periodFrom && !!periodTo,
+    staleTime: 5 * 60_000,
+  });
+
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
     const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
@@ -255,15 +266,20 @@ function Index() {
       const nf = vnf?.porLocal[loc] ?? 0;
       const o = oi?.porLocal[loc] ?? 0;
       const segSum = f + nf + o;
-      const real = tvb?.porLocal[loc] ?? segSum;
+      let real = tvb?.porLocal[loc] ?? segSum;
+      let fromVinson = false;
+      if (/la\s*mala/i.test(loc) && vinsonMala.data && vinsonMala.data.total > 0) {
+        real = vinsonMala.data.total;
+        fromVinson = true;
+      }
       const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
       const variacion = hasProy && real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion };
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson };
     });
     return { rows };
-  }, [data, activeLocal]);
+  }, [data, activeLocal, vinsonMala.data]);
 
   const gastosResumen = useMemo(() => {
     const rows = data.pyl
@@ -861,7 +877,12 @@ function Index() {
                         <div className="grid grid-cols-3 gap-5 shrink-0 w-[460px]">
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Total Venta Bruta</div>
-                            <div className="font-display text-base font-bold text-foreground tabular-nums">{fmtMoney(r.real)}</div>
+                            <div className={`font-display text-base font-bold tabular-nums ${r.fromVinson ? "text-cyan" : "text-foreground"}`}>
+                              {r.fromVinson && vinsonMala.isFetching ? "…" : fmtMoney(r.real)}
+                            </div>
+                            {r.fromVinson && (
+                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">Vinson · 643</div>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Proyectado</div>
