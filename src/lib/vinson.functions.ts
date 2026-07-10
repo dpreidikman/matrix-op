@@ -351,3 +351,27 @@ export const getVinsonCachedRange = createServerFn({ method: "POST" })
       return { total, days, missingDates: missing };
     },
   );
+
+export const getVinsonHistory = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({ storeId: z.number().int().positive() }),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<{ rows: { date: string; total: number }[]; total: number }> => {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: rows, error } = await supabaseAdmin
+        .from("vinson_daily_sales")
+        .select("date,total")
+        .eq("store_id", data.storeId)
+        .order("date", { ascending: false });
+      if (error) throw error;
+      const list = (rows ?? []).map((r: { date: string; total: number | string }) => ({
+        date: r.date,
+        total: Number(r.total),
+      }));
+      const total = list.reduce((a, r) => a + r.total, 0);
+      return { rows: list, total };
+    },
+  );
