@@ -52,19 +52,40 @@ export const getVinsonSales = createServerFn({ method: "POST" })
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     }),
   )
-  .handler(async ({ data }): Promise<{ shifts: VinsonShift[] }> => {
-    const token = await getToken();
-    const url = `${BASE}/api/Sales/GetSalesPerStorePerShift/${data.idTienda}/${toApiDate(data.date)}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      // Token might have been invalidated; retry once with a fresh token.
-      cachedToken = null;
-      const t2 = await getToken();
-      const r2 = await fetch(url, { headers: { Authorization: `Bearer ${t2}` } });
-      if (!r2.ok) throw new Error(`Sales fetch failed [${r2.status}]: ${await r2.text()}`);
-      const shifts = (await r2.json()) as VinsonShift[];
+  .handler(
+    async ({
+      data,
+    }): Promise<{ shifts: VinsonShift[]; warning?: string }> => {
+      const url = `${BASE}/api/Sales/GetSalesPerStorePerShift/${data.idTienda}/${toApiDate(data.date)}`;
+
+      const call = async () => {
+        const token = await getToken();
+        return fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      };
+
+      let res = await call();
+      if (res.status === 401 || res.status === 403) {
+        cachedToken = null;
+        res = await call();
+      }
+
+      if (!res.ok) {
+        const body = await res.text();
+        // The upstream API returns 400 + "Object reference not set to an
+        // instance of an object." for stores/dates it cannot resolve
+        // (e.g. tiendas migradas a VinsonPOS). Treat as "no data" instead
+        // of a hard error so the UI stays usable.
+        if (res.status === 400 && /Object reference/i.test(body)) {
+          return {
+            shifts: [],
+            warning:
+              "La API no devolvió datos para esta tienda/fecha (posible tienda sin operación en ese día).",
+          };
+        }
+        throw new Error(`Sales fetch failed [${res.status}]: ${body}`);
+      }
+
+      const shifts = (await res.json()) as VinsonShift[];
       return { shifts };
-    }
-    const shifts = (await res.json()) as VinsonShift[];
-    return { shifts };
-  });
+    },
+  );
