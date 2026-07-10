@@ -2,10 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Activity, Menu, X, RefreshCw } from "lucide-react";
+import { Activity, Menu, X, RefreshCw, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { getVinsonSales, type VinsonShift } from "@/lib/vinson.functions";
+import {
+  getVinsonSales,
+  syncVinsonRange,
+  type VinsonShift,
+} from "@/lib/vinson.functions";
 
 const STORES = [
   { id: 643, name: "La Mala" },
@@ -38,12 +42,55 @@ function VinsonPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeId, setStoreId] = useState<number>(STORES[0].id);
   const [date, setDate] = useState<string>(todayIso());
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string>("");
   const fetchSales = useServerFn(getVinsonSales);
+  const runSync = useServerFn(syncVinsonRange);
 
   const mutation = useMutation({
     mutationFn: () => fetchSales({ data: { idTienda: storeId, date } }),
     onError: (e: Error) => toast.error(e.message),
   });
+
+  function isoAdd(iso: string, days: number) {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function backfill2026() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMsg("Iniciando…");
+    try {
+      const today = todayIso();
+      const yesterday = isoAdd(today, -1);
+      let cursor = "2026-01-01";
+      let totalSynced = 0;
+      let totalSkipped = 0;
+      let totalFailed = 0;
+      const CHUNK = 20;
+      while (cursor <= yesterday) {
+        const chunkEnd = isoAdd(cursor, CHUNK - 1);
+        const to = chunkEnd > yesterday ? yesterday : chunkEnd;
+        setSyncMsg(`Sincronizando ${cursor} → ${to} (${totalSynced} guardados)`);
+        const r = await runSync({ data: { storeId, from: cursor, to } });
+        totalSynced += r.synced;
+        totalSkipped += r.skipped;
+        totalFailed += r.failed;
+        cursor = isoAdd(to, 1);
+      }
+      setSyncMsg(
+        `Listo · ${totalSynced} nuevos · ${totalSkipped} en caché · ${totalFailed} sin datos`,
+      );
+      toast.success(`Backfill 2026 completo · ${totalSynced} días`);
+    } catch (e) {
+      toast.error((e as Error).message);
+      setSyncMsg("Error durante la sincronización.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const shifts: VinsonShift[] = mutation.data?.shifts ?? [];
   const total = shifts.reduce((acc, s) => acc + Number(s.sale ?? 0), 0);
@@ -174,8 +221,23 @@ function VinsonPage() {
                 <RefreshCw className={`size-4 ${mutation.isPending ? "animate-spin" : ""}`} />
                 Consultar
               </button>
+              <button
+                onClick={backfill2026}
+                disabled={syncing}
+                className="inline-flex items-center gap-2 rounded-md bg-magenta/20 border border-magenta/40 px-4 py-2 text-sm font-medium text-magenta hover:bg-magenta/30 disabled:opacity-50"
+                title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta ayer"
+              >
+                <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
+                {syncing ? "Sincronizando…" : "Backfill 2026"}
+              </button>
             </div>
           </header>
+
+          {syncMsg && (
+            <div className="mb-4 rounded-md border border-magenta/30 bg-magenta/5 px-4 py-2 text-xs font-mono text-magenta">
+              {syncMsg}
+            </div>
+          )}
 
           <section className="rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
