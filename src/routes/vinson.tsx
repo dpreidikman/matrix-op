@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, Database } from "lucide-react";
@@ -51,6 +51,43 @@ function VinsonPage() {
     queryFn: () => fetchHistory({ data: { storeId } }),
     staleTime: 30_000,
   });
+
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of historyQuery.data?.rows ?? []) {
+      if (/^\d{4}-\d{2}/.test(r.date)) set.add(r.date.slice(0, 7));
+    }
+    return [...set].sort();
+  }, [historyQuery.data]);
+
+  const monthRange = (ym: string): [string, string] => {
+    const [y, m] = ym.split("-").map(Number);
+    const first = `${ym}-01`;
+    const last = new Date(y, m, 0).getDate();
+    return [first, `${ym}-${String(last).padStart(2, "0")}`];
+  };
+
+  const selectedMonth =
+    periodFrom && periodTo && periodFrom.slice(0, 7) === periodTo.slice(0, 7)
+      ? periodFrom.slice(0, 7)
+      : "";
+
+  const MES_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return `${MES_LABELS[m - 1]} ${y}`;
+  };
+
+  const filtered = useMemo(() => {
+    const rows = (historyQuery.data?.rows ?? []).filter(
+      (r) => (!periodFrom || r.date >= periodFrom) && (!periodTo || r.date <= periodTo),
+    );
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    return { rows, total };
+  }, [historyQuery.data, periodFrom, periodTo]);
 
   function isoAdd(iso: string, days: number) {
     const d = new Date(`${iso}T00:00:00Z`);
@@ -235,6 +272,59 @@ function VinsonPage() {
             </div>
           </header>
 
+          <div className="mb-6 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
+            <span className="opacity-60">Período</span>
+            {availableMonths.length > 0 && (
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) { setPeriodFrom(""); setPeriodTo(""); return; }
+                  const [f, t] = monthRange(v);
+                  setPeriodFrom(f);
+                  setPeriodTo(t);
+                }}
+                className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+              >
+                <option value="">— Mes —</option>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>{monthLabel(m)}</option>
+                ))}
+              </select>
+            )}
+            <input
+              type="date"
+              value={periodFrom}
+              onChange={(e) => setPeriodFrom(e.target.value)}
+              className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+            />
+            <span className="opacity-60">→</span>
+            <input
+              type="date"
+              value={periodTo}
+              onChange={(e) => setPeriodTo(e.target.value)}
+              className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+            />
+            <button
+              onClick={() => {
+                const anchor = periodFrom || periodTo || (availableMonths[availableMonths.length - 1] ? availableMonths[availableMonths.length - 1] + "-01" : "");
+                if (!anchor) return;
+                const [f, t] = monthRange(anchor.slice(0, 7));
+                setPeriodFrom(f);
+                setPeriodTo(t);
+              }}
+              className="text-[10px] px-2 py-1 border border-cyan/30 rounded text-cyan hover:bg-cyan/10"
+            >
+              MES COMPLETO
+            </button>
+            <button
+              onClick={() => { setPeriodFrom(""); setPeriodTo(""); }}
+              className="text-[10px] px-2 py-1 border border-white/10 rounded hover:border-cyan/40 hover:text-cyan text-muted-foreground"
+            >
+              RESET
+            </button>
+          </div>
+
           {syncMsg && (
             <div className="mb-4 rounded-md border border-magenta/30 bg-magenta/5 px-4 py-2 text-xs font-mono text-magenta">
               {syncMsg}
@@ -248,7 +338,7 @@ function VinsonPage() {
               </div>
               <div className="font-mono text-sm text-cyan">
                 {historyQuery.data
-                  ? `${historyQuery.data.rows.length} días · ${fmtMoney(historyQuery.data.total)}`
+                  ? `${filtered.rows.length} días · ${fmtMoney(filtered.total)}`
                   : "cargando…"}
               </div>
             </div>
@@ -259,13 +349,13 @@ function VinsonPage() {
               </div>
             )}
 
-            {!historyQuery.isLoading && (historyQuery.data?.rows.length ?? 0) === 0 && (
+            {!historyQuery.isLoading && filtered.rows.length === 0 && (
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                Sin datos guardados. Corré Backfill 2026 para poblar la base.
+                Sin datos en el período seleccionado.
               </div>
             )}
 
-            {(historyQuery.data?.rows.length ?? 0) > 0 && (
+            {filtered.rows.length > 0 && (
               <div className="max-h-[420px] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-panel/95 backdrop-blur">
@@ -277,7 +367,7 @@ function VinsonPage() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const asc = [...(historyQuery.data?.rows ?? [])].sort((a, b) =>
+                      const asc = [...filtered.rows].sort((a, b) =>
                         a.date < b.date ? -1 : 1,
                       );
                       let running = 0;
