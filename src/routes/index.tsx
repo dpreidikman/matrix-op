@@ -89,8 +89,9 @@ function Index() {
   const [loadedFileName, setLoadedFileName] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const inputRef2 = useRef<HTMLInputElement>(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -529,7 +530,7 @@ function Index() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground font-mono">
-                {isGastos ? "Base de gastos · imputaciones por local" : "Consolidated P&L · drill-down activo"} · refresh {now.toLocaleTimeString("es-AR", { hour12: false })}
+                {isGastos ? "Base de gastos · imputaciones por local" : "Consolidated P&L · drill-down activo"} · refresh {now ? now.toLocaleTimeString("es-AR", { hour12: false }) : "--:--:--"}
               </p>
               {loadedFileName && (
                 <p className="mt-1 text-[10px] text-cyan/70 font-mono uppercase tracking-[0.18em]">
