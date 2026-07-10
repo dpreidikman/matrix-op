@@ -3,6 +3,13 @@ import { z } from "zod";
 
 const BASE = "https://apireportes.vinson.com.ar";
 
+export const VINSON_STORES = [
+  { id: 643, name: "La Mala" },
+  { id: 695, name: "Costa 7070" },
+  { id: 73, name: "Narda Comedor" },
+  { id: 363, name: "Kona" },
+] as const;
+
 let cachedToken: { token: string; exp: number } | null = null;
 
 async function getToken(): Promise<string> {
