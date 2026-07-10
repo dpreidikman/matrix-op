@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, RefreshCw, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
   getVinsonSales,
+  getVinsonHistory,
   syncVinsonRange,
   type VinsonShift,
 } from "@/lib/vinson.functions";
@@ -46,6 +47,29 @@ function VinsonPage() {
   const [syncMsg, setSyncMsg] = useState<string>("");
   const fetchSales = useServerFn(getVinsonSales);
   const runSync = useServerFn(syncVinsonRange);
+  const fetchHistory = useServerFn(getVinsonHistory);
+  const queryClient = useQueryClient();
+
+  const historyQuery = useQuery({
+    queryKey: ["vinson", "history", storeId],
+    queryFn: () => fetchHistory({ data: { storeId } }),
+    staleTime: 30_000,
+  });
+
+  const historyByMonth = useMemo(() => {
+    const rows = historyQuery.data?.rows ?? [];
+    const groups = new Map<string, { total: number; days: number }>();
+    for (const r of rows) {
+      const key = r.date.slice(0, 7);
+      const g = groups.get(key) ?? { total: 0, days: 0 };
+      g.total += r.total;
+      g.days += 1;
+      groups.set(key, g);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([month, v]) => ({ month, total: v.total, days: v.days }));
+  }, [historyQuery.data]);
 
   const mutation = useMutation({
     mutationFn: () => fetchSales({ data: { idTienda: storeId, date } }),
@@ -84,6 +108,7 @@ function VinsonPage() {
         `Listo · ${totalSynced} nuevos · ${totalSkipped} en caché · ${totalFailed} sin datos`,
       );
       toast.success(`Backfill 2026 completo · ${totalSynced} días`);
+      queryClient.invalidateQueries({ queryKey: ["vinson", "history", storeId] });
     } catch (e) {
       toast.error((e as Error).message);
       setSyncMsg("Error durante la sincronización.");
@@ -296,6 +321,89 @@ function VinsonPage() {
                   </tr>
                 </tbody>
               </table>
+            )}
+          </section>
+
+          <section className="mt-6 rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+              <div className="font-display text-sm tracking-widest text-muted-foreground">
+                HISTÓRICO EN BASE · {store?.name}
+              </div>
+              <div className="font-mono text-sm text-cyan">
+                {historyQuery.data
+                  ? `${historyQuery.data.rows.length} días · ${fmtMoney(historyQuery.data.total)}`
+                  : "cargando…"}
+              </div>
+            </div>
+
+            {historyQuery.isLoading && (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Cargando histórico…
+              </div>
+            )}
+
+            {!historyQuery.isLoading && (historyQuery.data?.rows.length ?? 0) === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                Sin datos guardados. Corré Backfill 2026 para poblar la base.
+              </div>
+            )}
+
+            {historyByMonth.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+                {historyByMonth.map((m) => (
+                  <div
+                    key={m.month}
+                    className="rounded-md border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      {m.month} · {m.days} días
+                    </div>
+                    <div className="mt-1 font-mono text-lg text-cyan">
+                      {fmtMoney(m.total)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(historyQuery.data?.rows.length ?? 0) > 0 && (
+              <div className="max-h-[420px] overflow-auto border-t border-white/10">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-panel/95 backdrop-blur">
+                    <tr className="text-left text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      <th className="px-5 py-3">Fecha</th>
+                      <th className="px-5 py-3 text-right">Venta</th>
+                      <th className="px-5 py-3 text-right">Acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const asc = [...(historyQuery.data?.rows ?? [])].sort((a, b) =>
+                        a.date < b.date ? -1 : 1,
+                      );
+                      let running = 0;
+                      const rendered = asc.map((r) => {
+                        running += r.total;
+                        return { ...r, running };
+                      });
+                      return rendered
+                        .slice()
+                        .reverse()
+                        .map((r) => (
+                          <tr key={r.date} className="border-t border-white/5">
+                            <td className="px-5 py-2 font-mono text-muted-foreground">{r.date}</td>
+                            <td className="px-5 py-2 text-right font-mono text-cyan">
+                              {fmtMoney(r.total)}
+                            </td>
+                            <td className="px-5 py-2 text-right font-mono text-foreground">
+                              {fmtMoney(r.running)}
+                            </td>
+                          </tr>
+                        ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         </main>
