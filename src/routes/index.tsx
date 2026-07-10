@@ -4,9 +4,9 @@ import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getVinsonSalesRange } from "@/lib/vinson.functions";
+import { getVinsonSales } from "@/lib/vinson.functions";
 
 const STORAGE_KEYS = {
   auto: "matrix:v1:auto",
