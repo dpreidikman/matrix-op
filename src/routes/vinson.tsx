@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, Database } from "lucide-react";
@@ -64,7 +64,15 @@ function VinsonPage() {
     setSyncMsg("Iniciando…");
     try {
       const today = todayIso();
-      let cursor = "2026-01-01";
+      const rows = historyQuery.data?.rows ?? [];
+      const lastCached = rows.length
+        ? rows.map((r) => r.date).sort().at(-1)!
+        : null;
+      let cursor = lastCached ? isoAdd(lastCached, 1) : "2026-01-01";
+      if (cursor > today) {
+        setSyncMsg("Ya está al día.");
+        return;
+      }
       let totalSynced = 0;
       let totalSkipped = 0;
       let totalFailed = 0;
@@ -82,7 +90,7 @@ function VinsonPage() {
       setSyncMsg(
         `Listo · ${totalSynced} nuevos · ${totalSkipped} en caché · ${totalFailed} sin datos`,
       );
-      toast.success(`Backfill 2026 completo · ${totalSynced} días`);
+      if (totalSynced > 0) toast.success(`Sincronizados ${totalSynced} días nuevos`);
       queryClient.invalidateQueries({ queryKey: ["vinson", "history", storeId] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -91,6 +99,21 @@ function VinsonPage() {
       setSyncing(false);
     }
   }
+
+  // Auto-sync missing days up to today, once per store per session.
+  const autoRan = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (historyQuery.isLoading || syncing) return;
+    if (autoRan.current.has(storeId)) return;
+    const rows = historyQuery.data?.rows ?? [];
+    const today = todayIso();
+    const lastCached = rows.length ? rows.map((r) => r.date).sort().at(-1)! : null;
+    if (!lastCached || lastCached < today) {
+      autoRan.current.add(storeId);
+      backfill2026();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, historyQuery.data, historyQuery.isLoading]);
 
   const store = STORES.find((s) => s.id === storeId);
 
