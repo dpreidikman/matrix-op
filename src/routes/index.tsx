@@ -239,6 +239,14 @@ function Index() {
   const maxVar = Math.max(...data.detalle.map((d) => Math.abs(d.variacion)), 0.001);
 
   // Total Venta Bruta = Venta F + Venta NF + Otros Ingresos por local
+  const fetchVinsonRange = useServerFn(getVinsonSalesRange);
+  const vinsonMala = useQuery({
+    queryKey: ["vinson", "range", 643, periodFrom, periodTo],
+    queryFn: () => fetchVinsonRange({ data: { idTienda: 643, from: periodFrom, to: periodTo } }),
+    enabled: !!periodFrom && !!periodTo,
+    staleTime: 5 * 60_000,
+  });
+
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
     const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
@@ -258,15 +266,20 @@ function Index() {
       const nf = vnf?.porLocal[loc] ?? 0;
       const o = oi?.porLocal[loc] ?? 0;
       const segSum = f + nf + o;
-      const real = tvb?.porLocal[loc] ?? segSum;
+      let real = tvb?.porLocal[loc] ?? segSum;
+      let fromVinson = false;
+      if (/la\s*mala/i.test(loc) && vinsonMala.data && vinsonMala.data.total > 0) {
+        real = vinsonMala.data.total;
+        fromVinson = true;
+      }
       const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
       const variacion = hasProy && real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion };
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson };
     });
     return { rows };
-  }, [data, activeLocal]);
+  }, [data, activeLocal, vinsonMala.data]);
 
   const gastosResumen = useMemo(() => {
     const rows = data.pyl
