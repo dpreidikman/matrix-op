@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, RefreshCw, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
   getVinsonSales,
+  getVinsonHistory,
   syncVinsonRange,
   type VinsonShift,
 } from "@/lib/vinson.functions";
@@ -46,6 +47,29 @@ function VinsonPage() {
   const [syncMsg, setSyncMsg] = useState<string>("");
   const fetchSales = useServerFn(getVinsonSales);
   const runSync = useServerFn(syncVinsonRange);
+  const fetchHistory = useServerFn(getVinsonHistory);
+  const queryClient = useQueryClient();
+
+  const historyQuery = useQuery({
+    queryKey: ["vinson", "history", storeId],
+    queryFn: () => fetchHistory({ data: { storeId } }),
+    staleTime: 30_000,
+  });
+
+  const historyByMonth = useMemo(() => {
+    const rows = historyQuery.data?.rows ?? [];
+    const groups = new Map<string, { total: number; days: number }>();
+    for (const r of rows) {
+      const key = r.date.slice(0, 7);
+      const g = groups.get(key) ?? { total: 0, days: 0 };
+      g.total += r.total;
+      g.days += 1;
+      groups.set(key, g);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([month, v]) => ({ month, total: v.total, days: v.days }));
+  }, [historyQuery.data]);
 
   const mutation = useMutation({
     mutationFn: () => fetchSales({ data: { idTienda: storeId, date } }),
@@ -84,6 +108,7 @@ function VinsonPage() {
         `Listo · ${totalSynced} nuevos · ${totalSkipped} en caché · ${totalFailed} sin datos`,
       );
       toast.success(`Backfill 2026 completo · ${totalSynced} días`);
+      queryClient.invalidateQueries({ queryKey: ["vinson", "history", storeId] });
     } catch (e) {
       toast.error((e as Error).message);
       setSyncMsg("Error durante la sincronización.");
