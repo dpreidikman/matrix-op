@@ -272,6 +272,59 @@ function VinsonPage() {
             </div>
           </header>
 
+          <div className="mb-6 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
+            <span className="opacity-60">Período</span>
+            {availableMonths.length > 0 && (
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) { setPeriodFrom(""); setPeriodTo(""); return; }
+                  const [f, t] = monthRange(v);
+                  setPeriodFrom(f);
+                  setPeriodTo(t);
+                }}
+                className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+              >
+                <option value="">— Mes —</option>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>{monthLabel(m)}</option>
+                ))}
+              </select>
+            )}
+            <input
+              type="date"
+              value={periodFrom}
+              onChange={(e) => setPeriodFrom(e.target.value)}
+              className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+            />
+            <span className="opacity-60">→</span>
+            <input
+              type="date"
+              value={periodTo}
+              onChange={(e) => setPeriodTo(e.target.value)}
+              className="bg-black/40 border border-cyan/30 rounded px-2 py-1.5 text-cyan text-xs focus:outline-none focus:border-cyan/70"
+            />
+            <button
+              onClick={() => {
+                const anchor = periodFrom || periodTo || (availableMonths[availableMonths.length - 1] ? availableMonths[availableMonths.length - 1] + "-01" : "");
+                if (!anchor) return;
+                const [f, t] = monthRange(anchor.slice(0, 7));
+                setPeriodFrom(f);
+                setPeriodTo(t);
+              }}
+              className="text-[10px] px-2 py-1 border border-cyan/30 rounded text-cyan hover:bg-cyan/10"
+            >
+              MES COMPLETO
+            </button>
+            <button
+              onClick={() => { setPeriodFrom(""); setPeriodTo(""); }}
+              className="text-[10px] px-2 py-1 border border-white/10 rounded hover:border-cyan/40 hover:text-cyan text-muted-foreground"
+            >
+              RESET
+            </button>
+          </div>
+
           {syncMsg && (
             <div className="mb-4 rounded-md border border-magenta/30 bg-magenta/5 px-4 py-2 text-xs font-mono text-magenta">
               {syncMsg}
@@ -285,7 +338,7 @@ function VinsonPage() {
               </div>
               <div className="font-mono text-sm text-cyan">
                 {historyQuery.data
-                  ? `${historyQuery.data.rows.length} días · ${fmtMoney(historyQuery.data.total)}`
+                  ? `${filtered.rows.length} días · ${fmtMoney(filtered.total)}`
                   : "cargando…"}
               </div>
             </div>
@@ -296,13 +349,13 @@ function VinsonPage() {
               </div>
             )}
 
-            {!historyQuery.isLoading && (historyQuery.data?.rows.length ?? 0) === 0 && (
+            {!historyQuery.isLoading && filtered.rows.length === 0 && (
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                Sin datos guardados. Corré Backfill 2026 para poblar la base.
+                Sin datos en el período seleccionado.
               </div>
             )}
 
-            {(historyQuery.data?.rows.length ?? 0) > 0 && (
+            {filtered.rows.length > 0 && (
               <div className="max-h-[420px] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-panel/95 backdrop-blur">
@@ -314,7 +367,7 @@ function VinsonPage() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const asc = [...(historyQuery.data?.rows ?? [])].sort((a, b) =>
+                      const asc = [...filtered.rows].sort((a, b) =>
                         a.date < b.date ? -1 : 1,
                       );
                       let running = 0;
