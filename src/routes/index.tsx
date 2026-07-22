@@ -834,6 +834,7 @@ function Index() {
                               const v = getCell(row.concepto, l, row.porLocal[l] ?? 0);
                               const rowTotal = getRowTotal(row);
                               const ratio = rowTotal ? v / rowTotal : 0;
+                              const isOtros = !!otrosRow && row.concepto === otrosRow.concepto;
                               return (
                                 <td
                                   key={l}
@@ -848,7 +849,17 @@ function Index() {
                                         }%, transparent), transparent 70%)`,
                                   }}
                                 >
-                                  {fmtMoney(v)}
+                                  {isOtros ? (
+                                    <input
+                                      type="number"
+                                      value={otrosOverrides[l] ?? row.porLocal[l] ?? 0}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => setOtros(l, Number(e.target.value) || 0)}
+                                      className="w-28 bg-transparent border border-cyan/30 rounded px-2 py-1 text-right text-cyan focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/50 tabular-nums"
+                                    />
+                                  ) : (
+                                    fmtMoney(v)
+                                  )}
                                 </td>
                               );
                             })}
