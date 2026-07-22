@@ -197,7 +197,7 @@ function Index() {
       } catch (e) {
         console.warn("persist save failed", e);
       }
-      setRawData(combined);
+      setRawData(ensureSkeletonRows(combined));
       // Auto-setear rango del período detectado
       if (combined.gastos?.length) {
         const dates = combined.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
