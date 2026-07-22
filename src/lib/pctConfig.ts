@@ -9,8 +9,8 @@ export const PCT_STORAGE_KEY = "matrix:v1:pct";
 // Locales configurables (los que se alimentan de Vinson y aplican fórmulas).
 export const PCT_LOCALS = ["LA MALA", "COMEDOR"] as const;
 
-// Defaults históricos: F = 52% * 1.21 = 62.92 ; NF = 48%.
-export const DEFAULT_PCT: PctEntry = { f: 52 * 1.21, nf: 48 };
+// Defaults: F = 52% ; NF = 48%. La fórmula aplica: VENTA F = (TVB * f%) / 1.21.
+export const DEFAULT_PCT: PctEntry = { f: 52, nf: 48 };
 
 export const PCT_MONTHS_2026 = Array.from({ length: 12 }, (_, i) =>
   `2026-${String(i + 1).padStart(2, "0")}`,
