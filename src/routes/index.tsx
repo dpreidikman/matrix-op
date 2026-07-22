@@ -4,7 +4,7 @@ import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange } from "@/lib/vinson.functions";
 
@@ -12,7 +12,15 @@ const STORAGE_KEYS = {
   auto: "matrix:v1:auto",
   detallado: "matrix:v1:detallado",
   name: "matrix:v1:filename",
+  otros: "matrix:v1:otros",
 } as const;
+
+// Mapeo de locales de la matriz a tiendas Vinson.
+// El patrón se aplica sobre el nombre del local; el primero que matchee gana.
+const VINSON_MAP: Array<{ pattern: RegExp; storeId: number; label: string }> = [
+  { pattern: /la\s*mala/i, storeId: 643, label: "Vinson · 643" },
+  { pattern: /comedor/i, storeId: 73, label: "Vinson · 73" },
+];
 
 function loadPersisted(): { data: MatrixData; name: string } | null {
   if (typeof window === "undefined") return null;
@@ -62,6 +70,7 @@ const fmtDate = (iso?: string) => {
 
 function Index() {
   const [rawData, setRawData] = useState<MatrixData>(demoData);
+  const [otrosOverrides, setOtrosOverrides] = useState<Record<string, number>>({});
   useEffect(() => {
     const p = loadPersisted();
     if (p) {
@@ -75,7 +84,20 @@ function Index() {
         setPeriodTo(dates[dates.length - 1] ?? "");
       }
     }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.otros);
+      if (raw) setOtrosOverrides(JSON.parse(raw));
+    } catch (e) {
+      console.warn("otros load failed", e);
+    }
   }, []);
+  const setOtros = (local: string, val: number) => {
+    setOtrosOverrides((s) => {
+      const next = { ...s, [local]: val };
+      try { localStorage.setItem(STORAGE_KEYS.otros, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const [periodFrom, setPeriodFrom] = useState<string>("");
   const [periodTo, setPeriodTo] = useState<string>("");
   const data = useMemo(
@@ -241,20 +263,29 @@ function Index() {
 
   // Vinson: read cached daily totals from DB (populated by cron + manual sync).
   const fetchCached = useServerFn(getVinsonCachedRange);
-  const vinsonQuery = useQuery({
-    queryKey: ["vinson", "cached", 643, periodFrom, periodTo],
-    queryFn: () => fetchCached({ data: { storeId: 643, from: periodFrom, to: periodTo } }),
-    enabled: Boolean(periodFrom && periodTo),
-    staleTime: 60_000,
+  const vinsonQueries = useQueries({
+    queries: VINSON_MAP.map((v) => ({
+      queryKey: ["vinson", "cached", v.storeId, periodFrom, periodTo],
+      queryFn: () => fetchCached({ data: { storeId: v.storeId, from: periodFrom, to: periodTo } }),
+      enabled: Boolean(periodFrom && periodTo),
+      staleTime: 60_000,
+    })),
   });
-  const vinsonMala = useMemo(() => {
-    const total = vinsonQuery.data?.total ?? 0;
-    return {
-      total,
-      isFetching: vinsonQuery.isFetching,
-      missing: vinsonQuery.data?.missingDates.length ?? 0,
-    };
-  }, [vinsonQuery.data, vinsonQuery.isFetching]);
+  const vinsonByLocal = useMemo(() => {
+    const map = new Map<string, { total: number; isFetching: boolean; label: string; storeId: number }>();
+    VINSON_MAP.forEach((v, i) => {
+      const local = data.locales.find((l) => v.pattern.test(l));
+      if (!local) return;
+      const q = vinsonQueries[i];
+      map.set(local, {
+        total: q?.data?.total ?? 0,
+        isFetching: !!q?.isFetching,
+        label: v.label,
+        storeId: v.storeId,
+      });
+    });
+    return map;
+  }, [data.locales, vinsonQueries]);
 
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
@@ -273,13 +304,14 @@ function Index() {
     const rows = localesToShow.map((loc) => {
       let f = vf?.porLocal[loc] ?? 0;
       let nf = vnf?.porLocal[loc] ?? 0;
-      const o = oi?.porLocal[loc] ?? 0;
+      const o = otrosOverrides[loc] ?? oi?.porLocal[loc] ?? 0;
       let real = tvb?.porLocal[loc] ?? f + nf + o;
-      let fromVinson = false;
-      if (/la\s*mala/i.test(loc) && (vinsonMala.total > 0 || vinsonMala.isFetching)) {
-        real = vinsonMala.total;
-        fromVinson = true;
-        // Derivar VENTA F y VENTA NF desde TOTAL VENTA BRUTA (Vinson).
+      const info = vinsonByLocal.get(loc);
+      const fromVinson = !!info && (info.total > 0 || info.isFetching);
+      let vinsonLabel: string | undefined;
+      if (info && (info.total > 0 || info.isFetching)) {
+        real = info.total;
+        vinsonLabel = info.label;
         // VENTA F = TVB * 52% * 1.21 ; VENTA NF = TVB * 48% ; OTROS INGRESOS = manual.
         f = real * 0.52 * 1.21;
         nf = real * 0.48;
@@ -289,37 +321,50 @@ function Index() {
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
       const variacion = hasProy && real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson };
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson, vinsonLabel };
     });
     return { rows };
-  }, [data, activeLocal, vinsonMala]);
+  }, [data, activeLocal, vinsonByLocal, otrosOverrides, excludedSet]);
 
   // Overrides para la matriz P&L: cuando Vinson trae ventas de LA MALA,
   // derivamos TOTAL VENTA BRUTA, VENTA F, VENTA NF y TOTAL INGRESOS para esa columna.
   // OTROS INGRESOS se mantiene como valor manual del archivo.
+  const otrosRow = useMemo(
+    () => data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto)),
+    [data.pyl],
+  );
+
   const cellOverrides = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
-    if (!(vinsonMala.total > 0)) return map;
-    const malaKey = data.locales.find((l) => /la\s*mala/i.test(l));
-    if (!malaKey) return map;
-    const tvb = vinsonMala.total;
-    const f = tvb * 0.52 * 1.21;
-    const nf = tvb * 0.48;
-    const oiRow = data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto));
-    const o = oiRow?.porLocal[malaKey] ?? 0;
-    const set = (concepto: string, value: number) => {
+    const set = (concepto: string, local: string, value: number) => {
       const inner = map.get(concepto) ?? new Map<string, number>();
-      inner.set(malaKey, value);
+      inner.set(local, value);
       map.set(concepto, inner);
     };
-    for (const row of data.pyl) {
-      if (/total\s*venta\s*bruta/i.test(row.concepto)) set(row.concepto, tvb);
-      else if (/^venta\s*f\b/i.test(row.concepto)) set(row.concepto, f);
-      else if (/^venta\s*nf\b/i.test(row.concepto)) set(row.concepto, nf);
-      else if (/total\s*ingresos/i.test(row.concepto)) set(row.concepto, f + nf + o);
+    // Overrides manuales de OTROS INGRESOS por local
+    if (otrosRow) {
+      for (const [loc, val] of Object.entries(otrosOverrides)) {
+        set(otrosRow.concepto, loc, val);
+      }
+    }
+    const getOtros = (loc: string) =>
+      otrosOverrides[loc] ?? otrosRow?.porLocal[loc] ?? 0;
+    // Overrides derivados de Vinson por local mapeado
+    for (const [loc, info] of vinsonByLocal) {
+      if (!(info.total > 0)) continue;
+      const tvb = info.total;
+      const f = tvb * 0.52 * 1.21;
+      const nf = tvb * 0.48;
+      const o = getOtros(loc);
+      for (const row of data.pyl) {
+        if (/total\s*venta\s*bruta/i.test(row.concepto)) set(row.concepto, loc, tvb);
+        else if (/^venta\s*f\b/i.test(row.concepto)) set(row.concepto, loc, f);
+        else if (/^venta\s*nf\b/i.test(row.concepto)) set(row.concepto, loc, nf);
+        else if (/total\s*ingresos/i.test(row.concepto)) set(row.concepto, loc, f + nf + o);
+      }
     }
     return map;
-  }, [data, vinsonMala.total]);
+  }, [data, vinsonByLocal, otrosOverrides, otrosRow]);
 
   const getCell = (concepto: string, local: string, original: number) =>
     cellOverrides.get(concepto)?.get(local) ?? original;
@@ -789,6 +834,7 @@ function Index() {
                               const v = getCell(row.concepto, l, row.porLocal[l] ?? 0);
                               const rowTotal = getRowTotal(row);
                               const ratio = rowTotal ? v / rowTotal : 0;
+                              const isOtros = !!otrosRow && row.concepto === otrosRow.concepto;
                               return (
                                 <td
                                   key={l}
@@ -803,7 +849,17 @@ function Index() {
                                         }%, transparent), transparent 70%)`,
                                   }}
                                 >
-                                  {fmtMoney(v)}
+                                  {isOtros ? (
+                                    <input
+                                      type="number"
+                                      value={otrosOverrides[l] ?? row.porLocal[l] ?? 0}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => setOtros(l, Number(e.target.value) || 0)}
+                                      className="w-28 bg-transparent border border-cyan/30 rounded px-2 py-1 text-right text-cyan focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/50 tabular-nums"
+                                    />
+                                  ) : (
+                                    fmtMoney(v)
+                                  )}
                                 </td>
                               );
                             })}
@@ -929,10 +985,10 @@ function Index() {
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Total Venta Bruta</div>
                             <div className={`font-display text-base font-bold tabular-nums ${r.fromVinson ? "text-cyan" : "text-foreground"}`}>
-                              {r.fromVinson && vinsonMala.isFetching ? "…" : fmtMoney(r.real)}
+                              {r.fromVinson && r.real === 0 ? "…" : fmtMoney(r.real)}
                             </div>
-                            {r.fromVinson && (
-                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">Vinson · 643</div>
+                            {r.fromVinson && r.vinsonLabel && (
+                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">{r.vinsonLabel}</div>
                             )}
                           </div>
                           <div className="text-right">
