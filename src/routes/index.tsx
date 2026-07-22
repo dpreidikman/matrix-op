@@ -7,6 +7,7 @@ import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMa
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange } from "@/lib/vinson.functions";
+import { DEFAULT_PCT, getPct, loadPctConfig, type PctConfig } from "@/lib/pctConfig";
 
 const STORAGE_KEYS = {
   auto: "matrix:v1:auto",
@@ -71,6 +72,7 @@ const fmtDate = (iso?: string) => {
 function Index() {
   const [rawData, setRawData] = useState<MatrixData>(demoData);
   const [otrosOverrides, setOtrosOverrides] = useState<Record<string, number>>({});
+  const [pctCfg, setPctCfg] = useState<PctConfig>({});
   useEffect(() => {
     const p = loadPersisted();
     if (p) {
@@ -90,6 +92,7 @@ function Index() {
     } catch (e) {
       console.warn("otros load failed", e);
     }
+    setPctCfg(loadPctConfig());
   }, []);
   const setOtros = (local: string, val: number) => {
     setOtrosOverrides((s) => {
@@ -287,6 +290,10 @@ function Index() {
     return map;
   }, [data.locales, vinsonQueries]);
 
+  // Mes efectivo para elegir los % (usa el mes de periodFrom; fallback default).
+  const pctYm = periodFrom ? periodFrom.slice(0, 7) : "";
+  const pctFor = (local: string) => (pctYm ? getPct(pctCfg, local, pctYm) : DEFAULT_PCT);
+
   const ventaBruta = useMemo(() => {
     const vf = data.pyl.find((p) => /^venta\s*f\b/i.test(p.concepto));
     const vnf = data.pyl.find((p) => /^venta\s*nf\b/i.test(p.concepto));
@@ -312,9 +319,10 @@ function Index() {
       if (info && (info.total > 0 || info.isFetching)) {
         real = info.total;
         vinsonLabel = info.label;
-        // VENTA F = TVB * 52% * 1.21 ; VENTA NF = TVB * 48% ; OTROS INGRESOS = manual.
-        f = real * 0.52 * 1.21;
-        nf = real * 0.48;
+        // VENTA F/NF = TVB * % configurado por local+mes ; OTROS INGRESOS = manual.
+        const p = pctFor(loc);
+        f = real * (p.f / 100);
+        nf = real * (p.nf / 100);
       }
       const segSum = f + nf + o;
       const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
@@ -324,7 +332,7 @@ function Index() {
       return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson, vinsonLabel };
     });
     return { rows };
-  }, [data, activeLocal, vinsonByLocal, otrosOverrides, excludedSet]);
+  }, [data, activeLocal, vinsonByLocal, otrosOverrides, excludedSet, pctCfg, pctYm]);
 
   // Overrides para la matriz P&L: cuando Vinson trae ventas de LA MALA,
   // derivamos TOTAL VENTA BRUTA, VENTA F, VENTA NF y TOTAL INGRESOS para esa columna.
@@ -353,8 +361,9 @@ function Index() {
     for (const [loc, info] of vinsonByLocal) {
       if (!(info.total > 0)) continue;
       const tvb = info.total;
-      const f = tvb * 0.52 * 1.21;
-      const nf = tvb * 0.48;
+      const p = pctFor(loc);
+      const f = tvb * (p.f / 100);
+      const nf = tvb * (p.nf / 100);
       const o = getOtros(loc);
       for (const row of data.pyl) {
         if (/total\s*venta\s*bruta/i.test(row.concepto)) set(row.concepto, loc, tvb);
@@ -364,7 +373,7 @@ function Index() {
       }
     }
     return map;
-  }, [data, vinsonByLocal, otrosOverrides, otrosRow]);
+  }, [data, vinsonByLocal, otrosOverrides, otrosRow, pctCfg, pctYm]);
 
   const getCell = (concepto: string, local: string, original: number) =>
     cellOverrides.get(concepto)?.get(local) ?? original;
@@ -460,6 +469,12 @@ function Index() {
                 <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
                 <span>Matrix · P&amp;L</span>
               </div>
+            </Link>
+            <Link
+              to="/percentages"
+              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            >
+              % Venta F / NF
             </Link>
             <Link
               to="/vinson"
