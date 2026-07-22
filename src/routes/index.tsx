@@ -294,6 +294,45 @@ function Index() {
     return { rows };
   }, [data, activeLocal, vinsonMala]);
 
+  // Overrides para la matriz P&L: cuando Vinson trae ventas de LA MALA,
+  // derivamos TOTAL VENTA BRUTA, VENTA F, VENTA NF y TOTAL INGRESOS para esa columna.
+  // OTROS INGRESOS se mantiene como valor manual del archivo.
+  const cellOverrides = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    if (!(vinsonMala.total > 0)) return map;
+    const malaKey = data.locales.find((l) => /la\s*mala/i.test(l));
+    if (!malaKey) return map;
+    const tvb = vinsonMala.total;
+    const f = tvb * 0.52 * 1.21;
+    const nf = tvb * 0.48;
+    const oiRow = data.pyl.find((p) => /otros\s*ingresos/i.test(p.concepto));
+    const o = oiRow?.porLocal[malaKey] ?? 0;
+    const set = (concepto: string, value: number) => {
+      const inner = map.get(concepto) ?? new Map<string, number>();
+      inner.set(malaKey, value);
+      map.set(concepto, inner);
+    };
+    for (const row of data.pyl) {
+      if (/total\s*venta\s*bruta/i.test(row.concepto)) set(row.concepto, tvb);
+      else if (/^venta\s*f\b/i.test(row.concepto)) set(row.concepto, f);
+      else if (/^venta\s*nf\b/i.test(row.concepto)) set(row.concepto, nf);
+      else if (/total\s*ingresos/i.test(row.concepto)) set(row.concepto, f + nf + o);
+    }
+    return map;
+  }, [data, vinsonMala.total]);
+
+  const getCell = (concepto: string, local: string, original: number) =>
+    cellOverrides.get(concepto)?.get(local) ?? original;
+  const getRowTotal = (row: MatrixData["pyl"][number]) => {
+    const ov = cellOverrides.get(row.concepto);
+    if (!ov) return row.total;
+    let t = row.total;
+    for (const [loc, val] of ov) {
+      t = t - (row.porLocal[loc] ?? 0) + val;
+    }
+    return t;
+  };
+
   const gastosResumen = useMemo(() => {
     const rows = data.pyl
       .filter((p) => p.esGrupo && p.concepto !== "TOTAL GASTOS")
@@ -747,8 +786,9 @@ function Index() {
                               </div>
                             </td>
                             {localesView.map((l) => {
-                              const v = row.porLocal[l] ?? 0;
-                              const ratio = row.total ? v / row.total : 0;
+                              const v = getCell(row.concepto, l, row.porLocal[l] ?? 0);
+                              const rowTotal = getRowTotal(row);
+                              const ratio = rowTotal ? v / rowTotal : 0;
                               return (
                                 <td
                                   key={l}
@@ -772,7 +812,7 @@ function Index() {
                                 isGroup ? "text-cyan font-bold" : ""
                               }`}
                             >
-                              {fmtMoney(row.total)}
+                              {fmtMoney(getRowTotal(row))}
                             </td>
                           </tr>
                         );
