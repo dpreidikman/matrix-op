@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinsonRouteImport } from './routes/vinson'
+import { Route as PercentagesRouteImport } from './routes/percentages'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicHooksVinsonDailyRouteImport } from './routes/api/public/hooks/vinson-daily'
 
 const VinsonRoute = VinsonRouteImport.update({
   id: '/vinson',
   path: '/vinson',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PercentagesRoute = PercentagesRouteImport.update({
+  id: '/percentages',
+  path: '/percentages',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -32,30 +38,39 @@ const ApiPublicHooksVinsonDailyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/vinson' | '/api/public/hooks/vinson-daily'
+  fullPaths: '/' | '/percentages' | '/vinson' | '/api/public/hooks/vinson-daily'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/vinson' | '/api/public/hooks/vinson-daily'
-  id: '__root__' | '/' | '/vinson' | '/api/public/hooks/vinson-daily'
+  to: '/' | '/percentages' | '/vinson' | '/api/public/hooks/vinson-daily'
+  id:
+    | '__root__'
+    | '/'
+    | '/percentages'
+    | '/vinson'
+    | '/api/public/hooks/vinson-daily'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PercentagesRoute: typeof PercentagesRoute
   VinsonRoute: typeof VinsonRoute
   ApiPublicHooksVinsonDailyRoute: typeof ApiPublicHooksVinsonDailyRoute
 }
@@ -67,6 +82,13 @@ declare module '@tanstack/react-router' {
       path: '/vinson'
       fullPath: '/vinson'
       preLoaderRoute: typeof VinsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/percentages': {
+      id: '/percentages'
+      path: '/percentages'
+      fullPath: '/percentages'
+      preLoaderRoute: typeof PercentagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -88,6 +110,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PercentagesRoute: PercentagesRoute,
   VinsonRoute: VinsonRoute,
   ApiPublicHooksVinsonDailyRoute: ApiPublicHooksVinsonDailyRoute,
 }
