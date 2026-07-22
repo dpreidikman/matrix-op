@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange } from "@/lib/vinson.functions";
@@ -15,6 +15,32 @@ const STORAGE_KEYS = {
   name: "matrix:v1:filename",
   otros: "matrix:v1:otros",
 } as const;
+
+// Asegura que el pyl incluya todas las filas del esqueleto (en la posición correcta),
+// aunque provenga de datos persistidos anteriores a nuevas filas del esqueleto.
+function ensureSkeletonRows(data: MatrixData): MatrixData {
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const existing = new Map(data.pyl.map((r) => [norm(r.concepto), r]));
+  const emptyPorLocal = () => Object.fromEntries(data.locales.map((l) => [l, 0]));
+  const pyl = MATRIX_SKELETON.map((it) => {
+    const found = existing.get(norm(it.concepto));
+    if (found) return found;
+    return {
+      concepto: it.concepto,
+      grupo: it.parent ?? undefined,
+      porLocal: emptyPorLocal(),
+      total: 0,
+      esGrupo: it.esGrupo,
+      esSubtotal: it.esSubtotal,
+    };
+  });
+  // Conservar filas del dataset que no estén en el esqueleto (extras)
+  const skelKeys = new Set(MATRIX_SKELETON.map((it) => norm(it.concepto)));
+  for (const r of data.pyl) {
+    if (!skelKeys.has(norm(r.concepto))) pyl.push(r);
+  }
+  return { ...data, pyl };
+}
 
 // Mapeo de locales de la matriz a tiendas Vinson.
 // El patrón se aplica sobre el nombre del local; el primero que matchee gana.
@@ -76,7 +102,7 @@ function Index() {
   useEffect(() => {
     const p = loadPersisted();
     if (p) {
-      setRawData(p.data);
+      setRawData(ensureSkeletonRows(p.data));
       setLoadedFileName(p.name);
       setActiveLocal("ALL");
       setSelectedConcept(p.data.pyl.find((r) => !r.esGrupo)?.concepto ?? p.data.pyl[0]?.concepto ?? "");
