@@ -319,9 +319,9 @@ function Index() {
       if (info && (info.total > 0 || info.isFetching)) {
         real = info.total;
         vinsonLabel = info.label;
-        // VENTA F/NF = TVB * % configurado por local+mes ; OTROS INGRESOS = manual.
+        // VENTA F = (TVB * f%) / 1.21 ; VENTA NF = TVB * nf% ; OTROS INGRESOS = manual.
         const p = pctFor(loc);
-        f = real * (p.f / 100);
+        f = (real * (p.f / 100)) / 1.21;
         nf = real * (p.nf / 100);
       }
       const segSum = f + nf + o;
@@ -362,11 +362,12 @@ function Index() {
       if (!(info.total > 0)) continue;
       const tvb = info.total;
       const p = pctFor(loc);
-      const f = tvb * (p.f / 100);
+      const f = (tvb * (p.f / 100)) / 1.21;
       const nf = tvb * (p.nf / 100);
       const o = getOtros(loc);
       for (const row of data.pyl) {
         if (/total\s*venta\s*bruta/i.test(row.concepto)) set(row.concepto, loc, tvb);
+        else if (/total\s*venta\s*neta/i.test(row.concepto)) set(row.concepto, loc, tvb / 1.21);
         else if (/^venta\s*f\b/i.test(row.concepto)) set(row.concepto, loc, f);
         else if (/^venta\s*nf\b/i.test(row.concepto)) set(row.concepto, loc, nf);
         else if (/total\s*ingresos/i.test(row.concepto)) set(row.concepto, loc, f + nf + o);
