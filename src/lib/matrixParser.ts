@@ -391,7 +391,7 @@ function canonLocal(s: unknown): string {
 // Esqueleto EXACTO de la matriz P&L (RESUMEN). Cada entry: [concepto, parent|null]
 // parent === null → fila raíz (grupo o subtotal). parent !== null → hijo (subcategoría).
 export type SkelItem = { concepto: string; parent: string | null; esGrupo?: boolean; esSubtotal?: boolean };
-const MATRIX_SKELETON: SkelItem[] = [
+export const MATRIX_SKELETON: SkelItem[] = [
   { concepto: "TOTAL VENTA BRUTA", parent: null, esSubtotal: true },
   { concepto: "TOTAL VENTA NETA", parent: null, esSubtotal: true },
   { concepto: "TOTAL INGRESOS", parent: null, esGrupo: true, esSubtotal: true },
