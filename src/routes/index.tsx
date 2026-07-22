@@ -826,6 +826,8 @@ function Index() {
                     return data.pyl
                       .filter((row) => {
                         if (row.esGrupo) return true;
+                        // Filas top-level sin grupo (ej. TOTAL VENTA BRUTA / NETA, CMV) siempre visibles.
+                        if (!row.grupo) return true;
                         // Hijo: ocultar si su grupo está colapsado (default colapsado).
                         const c = collapsed[row.grupo ?? ""] ?? true;
                         return !c;
