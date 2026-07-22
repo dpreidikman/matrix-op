@@ -476,12 +476,6 @@ function Index() {
             >
               VINSON
             </Link>
-            <Link
-              to="/percentages"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              % Venta F / NF
-            </Link>
 
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
               Entities
