@@ -101,11 +101,8 @@ function VinsonPage() {
     setSyncMsg("Iniciando…");
     try {
       const today = todayIso();
-      const rows = historyQuery.data?.rows ?? [];
-      const lastCached = rows.length
-        ? rows.map((r) => r.date).sort().at(-1)!
-        : null;
-      let cursor = lastCached ? isoAdd(lastCached, 1) : "2026-01-01";
+      // Siempre barrer todo 2026 hasta hoy; el servidor omite los días ya cacheados.
+      let cursor = "2026-01-01";
       if (cursor > today) {
         setSyncMsg("Ya está al día.");
         return;
@@ -144,8 +141,16 @@ function VinsonPage() {
     if (autoRan.current.has(storeId)) return;
     const rows = historyQuery.data?.rows ?? [];
     const today = todayIso();
-    const lastCached = rows.length ? rows.map((r) => r.date).sort().at(-1)! : null;
-    if (!lastCached || lastCached < today) {
+    const dates = new Set(rows.map((r) => r.date));
+    // Calcular cuántos días entre 2026-01-01 y ayer no están cacheados
+    let missing = 0;
+    const start = new Date("2026-01-01T00:00:00Z");
+    const yesterday = new Date(`${today}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    for (let d = new Date(start); d <= yesterday; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (!dates.has(d.toISOString().slice(0, 10))) missing++;
+    }
+    if (missing > 0) {
       autoRan.current.add(storeId);
       backfill2026();
     }
