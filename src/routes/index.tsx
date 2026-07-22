@@ -39,7 +39,16 @@ function ensureSkeletonRows(data: MatrixData): MatrixData {
   for (const r of data.pyl) {
     if (!skelKeys.has(norm(r.concepto))) pyl.push(r);
   }
-  return { ...data, pyl };
+  // Actualizar también el skeleton persistido: prepender las filas nuevas
+  // (TOTAL VENTA BRUTA / TOTAL VENTA NETA) si faltan, para que filterMatrixByPeriod
+  // reconstruya el pyl con ellas.
+  let skeleton = data.skeleton;
+  if (skeleton) {
+    const skelSet = new Set(skeleton.map((it) => norm(it.concepto)));
+    const missing = MATRIX_SKELETON.filter((it) => !skelSet.has(norm(it.concepto)));
+    if (missing.length) skeleton = [...missing, ...skeleton];
+  }
+  return { ...data, pyl, skeleton };
 }
 
 // Mapeo de locales de la matriz a tiendas Vinson.
