@@ -271,16 +271,20 @@ function Index() {
         ? data.locales.filter((l) => !excludedSet.has(l))
         : [activeLocal];
     const rows = localesToShow.map((loc) => {
-      const f = vf?.porLocal[loc] ?? 0;
-      const nf = vnf?.porLocal[loc] ?? 0;
+      let f = vf?.porLocal[loc] ?? 0;
+      let nf = vnf?.porLocal[loc] ?? 0;
       const o = oi?.porLocal[loc] ?? 0;
-      const segSum = f + nf + o;
-      let real = tvb?.porLocal[loc] ?? segSum;
+      let real = tvb?.porLocal[loc] ?? f + nf + o;
       let fromVinson = false;
       if (/la\s*mala/i.test(loc) && (vinsonMala.total > 0 || vinsonMala.isFetching)) {
         real = vinsonMala.total;
         fromVinson = true;
+        // Derivar VENTA F y VENTA NF desde TOTAL VENTA BRUTA (Vinson).
+        // VENTA F = TVB * 52% * 1.21 ; VENTA NF = TVB * 48% ; OTROS INGRESOS = manual.
+        f = real * 0.52 * 1.21;
+        nf = real * 0.48;
       }
+      const segSum = f + nf + o;
       const proyectadoRaw = proyMap[loc] ?? proy?.porLocal[loc];
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
