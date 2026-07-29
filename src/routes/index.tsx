@@ -56,6 +56,8 @@ function ensureSkeletonRows(data: MatrixData): MatrixData {
 const VINSON_MAP: Array<{ pattern: RegExp; storeId: number; label: string }> = [
   { pattern: /la\s*mala/i, storeId: 643, label: "Vinson · 643" },
   { pattern: /comedor/i, storeId: 73, label: "Vinson · 73" },
+  { pattern: /costa\s*resto/i, storeId: 695, label: "Vinson · 695" },
+  { pattern: /^kona$|kona/i, storeId: 363, label: "Vinson · 363" },
 ];
 
 function loadPersisted(): { data: MatrixData; name: string } | null {
