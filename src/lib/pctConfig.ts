@@ -6,8 +6,19 @@ export type PctConfig = Record<string, Record<string, PctEntry>>; // local -> ym
 
 export const PCT_STORAGE_KEY = "matrix:v1:pct";
 
-// Locales configurables (los que se alimentan de Vinson y aplican fórmulas).
-export const PCT_LOCALS = ["LA MALA", "COMEDOR"] as const;
+// Locales configurables (todos los locales de la matriz).
+export const PCT_LOCALS = [
+  "LA MALA",
+  "CRUZA POLO",
+  "CRUZA RECOLETA",
+  "COSTA RESTO",
+  "COSTA CLUB",
+  "COSTA GRAL",
+  "MILVIDAS",
+  "KONA",
+  "COCHINCHINA",
+  "COMEDOR",
+] as const;
 
 // Defaults: F = 52% ; NF = 48%. La fórmula aplica: VENTA F = (TVB * f%) / 1.21.
 export const DEFAULT_PCT: PctEntry = { f: 52, nf: 48 };
