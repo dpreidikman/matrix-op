@@ -793,8 +793,9 @@ function Index() {
                       })
                       .map((row) => {
                         const isSel = row.concepto === selectedConcept;
-                        const isGroup = !!row.esGrupo;
-                        const expandable = isGroup && hasChildren.has(row.concepto);
+                        // PADRE: grupos y filas top-level sin grupo (TVB / TVN).
+                        const isGroup = !!row.esGrupo || !row.grupo;
+                        const expandable = !!row.esGrupo && hasChildren.has(row.concepto);
                         const isOpen = expandable
                           ? !(collapsed[row.concepto] ?? true)
                           : false;
