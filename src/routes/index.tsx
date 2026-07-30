@@ -823,14 +823,18 @@ function Index() {
                               } backdrop-blur ${isSel ? "text-cyan" : ""}`}
                             >
                               <div className="flex items-center gap-2">
-                                {expandable ? (
-                                  isOpen ? (
-                                    <ChevronDown className="size-3.5 text-cyan" />
-                                  ) : (
-                                    <ChevronRight className="size-3.5 text-cyan" />
-                                  )
-                                ) : isGroup ? (
-                                  <span className="size-1.5 rounded-full bg-cyan/60 inline-block" />
+                                {isGroup ? (
+                                  <span className="flex size-3.5 shrink-0 items-center justify-center">
+                                    {expandable ? (
+                                      isOpen ? (
+                                        <ChevronDown className="size-3.5 text-cyan" />
+                                      ) : (
+                                        <ChevronRight className="size-3.5 text-cyan" />
+                                      )
+                                    ) : (
+                                      <span className="size-1.5 rounded-full bg-cyan/60 inline-block" />
+                                    )}
+                                  </span>
                                 ) : null}
                                 <span
                                   className={
