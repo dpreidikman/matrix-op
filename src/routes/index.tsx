@@ -741,49 +741,6 @@ function Index() {
             </div>
           </header>
 
-          {/* KPI GRID */}
-          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {kpisView.map((k, i) => {
-              const accent = ["cyan", "amber", "magenta", "lime"][i % 4];
-              const accentClass: Record<string, string> = {
-                cyan: "text-cyan",
-                amber: "text-amber",
-                magenta: "text-magenta",
-                lime: "text-lime",
-              };
-              return (
-                <div
-                  key={k.label}
-                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-panel/60 backdrop-blur p-5 hover:border-white/20 transition-all"
-                >
-                  <div className={`absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-current to-transparent ${accentClass[accent]}`} />
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                      {k.label}
-                    </div>
-                    <Zap className={`size-3 ${accentClass[accent]}`} />
-                  </div>
-                  <div className="font-mono text-2xl font-bold tabular-nums">
-                    {data.origen !== "gastos" && k.pct != null && k.label !== "Margen Operativo" ? fmtPct(k.pct) : fmtMoney(k.value)}
-                  </div>
-                  {k.delta != null && (
-                    <div
-                      className={`mt-2 inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                        k.delta >= 0
-                          ? "bg-lime/10 text-lime"
-                          : "bg-magenta/10 text-magenta"
-                      }`}
-                    >
-                      <TrendingUp className="size-3" />
-                      {k.delta >= 0 ? "+" : ""}
-                      {fmtPct(k.delta)} vs proyección
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </section>
-
           {/* P&L MATRIX */}
           <section className="mb-8 rounded-xl border border-white/10 bg-panel/40 backdrop-blur overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-5 py-3">
