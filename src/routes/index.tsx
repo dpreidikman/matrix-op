@@ -450,13 +450,8 @@ function Index() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
-      {/* Ambient grid + glow */}
-      <div className="pointer-events-none fixed inset-0 grid-bg opacity-40" />
-      <div className="pointer-events-none fixed -top-40 -right-40 size-[600px] rounded-full bg-cyan/20 blur-3xl" />
-      <div className="pointer-events-none fixed -bottom-60 -left-40 size-[700px] rounded-full bg-magenta/15 blur-3xl" />
-      <div className="pointer-events-none fixed inset-0 overflow-hidden opacity-[0.07]">
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan to-transparent animate-[scanline_8s_linear_infinite]" />
-      </div>
+      {/* Ambient grid */}
+      <div className="pointer-events-none fixed inset-0 grid-bg opacity-30" />
 
       <div className="relative flex min-h-screen">
         {/* Mobile sidebar overlay */}
@@ -603,7 +598,7 @@ function Index() {
               {data.periodo.mes} {data.periodo.anio}
             </div>
             <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-lime">
-              <span className="size-1.5 rounded-full bg-lime animate-[pulse-glow_1.5s_ease-in-out_infinite] shadow-[0_0_8px_currentColor]" />
+              <span className="size-1.5 rounded-full bg-lime" />
               ONLINE · 12ms
             </div>
           </div>
@@ -624,7 +619,7 @@ function Index() {
                 >
                   <Menu className="size-4" />
                 </button>
-                <h1 className="font-display text-2xl lg:text-3xl font-black tracking-tight text-glow">
+                <h1 className="font-display text-2xl lg:text-3xl font-semibold tracking-tight">
                   {activeLocal === "ALL" ? "MATRIX" : activeLocal.toUpperCase()}
                 </h1>
               </div>
@@ -717,7 +712,7 @@ function Index() {
               />
               <button
                 onClick={() => inputRef.current?.click()}
-                className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15 hover:ring-glow"
+                className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-cyan/0 via-cyan/20 to-cyan/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 <span className="relative flex items-center gap-2">
@@ -745,7 +740,7 @@ function Index() {
           <section className="mb-8 rounded-xl border border-white/10 bg-panel/40 backdrop-blur overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-5 py-3">
               <div className="flex items-center gap-3">
-                <span className="size-2 rounded-full bg-cyan animate-[pulse-glow_2s_ease-in-out_infinite] shadow-[0_0_10px_currentColor]" />
+                <span className="size-2 rounded-full bg-cyan" />
                 <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
                   {data.origen === "gastos" ? "GASTOS_BY_LOCATION_MATRIX" : "P&L_BY_LOCATION_MATRIX"}
                 </span>
@@ -921,7 +916,7 @@ function Index() {
                 <div>
                   {gastosResumen.rows.map((r, i) => {
                     const w = (r.total / gastosResumen.max) * 100;
-                    const accent = i % 3 === 0 ? "bg-cyan shadow-[0_0_14px_var(--color-cyan)]" : i % 3 === 1 ? "bg-magenta shadow-[0_0_14px_var(--color-magenta)]" : "bg-lime shadow-[0_0_14px_var(--color-lime)]";
+                    const accent = i % 3 === 0 ? "bg-cyan" : i % 3 === 1 ? "bg-magenta" : "bg-lime";
                     return (
                       <div key={r.concepto} className="mb-5 last:mb-0">
                         <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -970,7 +965,7 @@ function Index() {
                           {r.f > 0 && (
                             <div
                               title={`Venta F: ${fmtMoney(r.f)}`}
-                              className="h-full bg-cyan/90 shadow-[0_0_14px_var(--color-cyan)] hover:bg-cyan transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
+                              className="h-full bg-cyan/90 hover:bg-cyan transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
                               style={{ width: `${fPct}%` }}
                             >
                               {fPct > 10 ? fmtMoney(r.f) : ""}
@@ -979,7 +974,7 @@ function Index() {
                           {r.nf > 0 && (
                             <div
                               title={`Venta NF: ${fmtMoney(r.nf)}`}
-                              className="h-full bg-magenta/90 shadow-[0_0_14px_var(--color-magenta)] hover:bg-magenta transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
+                              className="h-full bg-magenta/90 hover:bg-magenta transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
                               style={{ width: `${nfPct}%` }}
                             >
                               {nfPct > 10 ? fmtMoney(r.nf) : ""}
@@ -988,7 +983,7 @@ function Index() {
                           {r.o > 0 && (
                             <div
                               title={`Otros Ingresos: ${fmtMoney(r.o)}`}
-                              className="h-full bg-lime/90 shadow-[0_0_14px_var(--color-lime)] hover:bg-lime transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
+                              className="h-full bg-lime/90 hover:bg-lime transition-colors flex items-center justify-center text-[10px] font-mono font-bold text-background tabular-nums px-1 overflow-hidden whitespace-nowrap"
                               style={{ width: `${oPct}%` }}
                             >
                               {oPct > 10 ? fmtMoney(r.o) : ""}
@@ -1126,7 +1121,7 @@ function Index() {
           <footer className="mt-12 pt-6 border-t border-white/10 flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
             <span>MATRIX // P&L Operating System</span>
             <span className="flex items-center gap-2">
-              <span className="size-1.5 rounded-full bg-cyan animate-[pulse-glow_2s_ease-in-out_infinite]" />
+              <span className="size-1.5 rounded-full bg-cyan" />
               SECURE_CHANNEL · ENCRYPTED
             </span>
           </footer>

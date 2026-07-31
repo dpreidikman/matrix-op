@@ -83,10 +83,8 @@ function Percentages() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
-      <div className="pointer-events-none fixed inset-0 grid-bg opacity-40" />
-      <div className="pointer-events-none fixed -top-40 -right-40 size-[600px] rounded-full bg-cyan/20 blur-3xl" />
-      <div className="pointer-events-none fixed -bottom-60 -left-40 size-[700px] rounded-full bg-magenta/15 blur-3xl" />
-
+      <div className="pointer-events-none fixed inset-0 grid-bg opacity-30" />
+            
       <div className="relative flex min-h-screen">
         {sidebarOpen && (
           <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />

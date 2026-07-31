@@ -15,29 +15,23 @@
   100% { transform: translateY(110%); }
 }
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; }
+  0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
-}
-@keyframes grid-fade {
-  0%, 100% { opacity: 0.05; }
-  50% { opacity: 0.12; }
 }
 
 @utility grid-bg {
   background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--color-cyan) 12%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--color-cyan) 12%, transparent) 1px, transparent 1px);
-  background-size: 48px 48px;
+    linear-gradient(to right, color-mix(in oklab, var(--color-foreground) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-foreground) 4%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
 }
 
 @utility text-glow {
-  text-shadow: 0 0 12px color-mix(in oklab, currentColor 60%, transparent);
+  text-shadow: 0 0 10px color-mix(in oklab, currentColor 35%, transparent);
 }
 
 @utility ring-glow {
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--color-cyan) 30%, transparent),
-    0 0 24px -4px color-mix(in oklab, var(--color-cyan) 40%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-cyan) 22%, transparent);
 }
 
 /*
@@ -104,15 +98,15 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.16 0.03 260);
-  --foreground: oklch(0.97 0.01 240);
-  --panel: oklch(0.20 0.035 260);
-  --panel-2: oklch(0.24 0.04 262);
-  --cyan: oklch(0.82 0.16 200);
-  --magenta: oklch(0.70 0.25 330);
-  --lime: oklch(0.88 0.20 135);
-  --amber: oklch(0.82 0.18 75);
+  --radius: 0.5rem;
+  --background: oklch(0.18 0.008 260);
+  --foreground: oklch(0.95 0.004 250);
+  --panel: oklch(0.21 0.008 260);
+  --panel-2: oklch(0.25 0.008 260);
+  --cyan: oklch(0.78 0.07 215);
+  --magenta: oklch(0.70 0.11 20);
+  --lime: oklch(0.78 0.10 155);
+  --amber: oklch(0.80 0.09 80);
   --card: var(--panel);
   --card-foreground: oklch(0.97 0.01 240);
   --popover: var(--panel);
@@ -125,10 +119,10 @@
   --muted-foreground: oklch(0.70 0.03 250);
   --accent: var(--magenta);
   --accent-foreground: oklch(0.97 0.01 240);
-  --destructive: oklch(0.68 0.22 22);
+  --destructive: oklch(0.66 0.14 22);
   --destructive-foreground: oklch(0.97 0.01 240);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
+  --border: oklch(1 0 0 / 7%);
+  --input: oklch(1 0 0 / 10%);
   --ring: var(--cyan);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);

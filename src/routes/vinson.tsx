@@ -262,7 +262,7 @@ function VinsonPage() {
                 <Activity className="size-3" />
                 Vinson · Reporting API
               </div>
-              <h1 className="mt-1 font-display text-3xl font-black tracking-widest text-glow text-cyan">
+              <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-foreground">
                 VENTAS POR TURNO
               </h1>
               <div className="mt-1 text-sm text-muted-foreground">
