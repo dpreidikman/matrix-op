@@ -6,7 +6,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getVinsonCachedRange } from "@/lib/vinson.functions";
+import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
+import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_PCT, getPct, loadPctConfig, type PctConfig } from "@/lib/pctConfig";
 
 const STORAGE_KEYS = {
@@ -303,6 +304,13 @@ function Index() {
 
   // Vinson: read cached daily totals from DB (populated by cron + manual sync).
   const fetchCached = useServerFn(getVinsonCachedRange);
+  const fetchLastDate = useServerFn(getVinsonLastDate);
+  const lastDateQuery = useQuery({
+    queryKey: ["vinson", "lastDate"],
+    queryFn: () => fetchLastDate({ data: undefined }),
+    staleTime: 60_000,
+  });
+  const vinsonLastDate = lastDateQuery.data?.date ?? null;
   const vinsonQueries = useQueries({
     queries: VINSON_MAP.map((v) => ({
       queryKey: ["vinson", "cached", v.storeId, periodFrom, periodTo],
