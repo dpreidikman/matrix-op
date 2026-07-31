@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
@@ -150,8 +150,6 @@ function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loadedFileName, setLoadedFileName] = useState<string>("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const inputRef2 = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -184,54 +182,6 @@ function Index() {
   const monthLabel = (ym: string) => {
     const [y, m] = ym.split("-").map(Number);
     return `${MES_LABELS[m - 1]} ${y}`;
-  };
-
-  const handleFile = async (f?: File | null, kind: "auto" | "detallado" = "auto") => {
-    if (!f) return;
-    try {
-      const parsed = kind === "detallado" ? await parseGastosDetallados(f) : await parseMatrix(f);
-      // Persistir en el slot correspondiente y mergear con el otro slot si existe
-      let combined: MatrixData = parsed;
-      try {
-        const slot = kind === "detallado" ? STORAGE_KEYS.detallado : STORAGE_KEYS.auto;
-        const otherSlot = kind === "detallado" ? STORAGE_KEYS.auto : STORAGE_KEYS.detallado;
-        localStorage.setItem(slot, JSON.stringify(parsed));
-        localStorage.setItem(STORAGE_KEYS.name, f.name);
-        const otherRaw = localStorage.getItem(otherSlot);
-        if (otherRaw) {
-          const other = JSON.parse(otherRaw) as MatrixData;
-          // Base = MATRIX/semanales (kind auto), overlay = gastos detallados
-          combined =
-            kind === "detallado"
-              ? mergeMatrixData(other, parsed)
-              : mergeMatrixData(parsed, other);
-        }
-      } catch (e) {
-        console.warn("persist save failed", e);
-      }
-      setRawData(ensureSkeletonRows(combined));
-      // Auto-setear rango del período detectado
-      if (combined.gastos?.length) {
-        const dates = combined.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
-        setPeriodFrom(dates[0] ?? "");
-        setPeriodTo(dates[dates.length - 1] ?? "");
-      } else {
-        setPeriodFrom("");
-        setPeriodTo("");
-      }
-      setActiveLocal("ALL");
-      setCollapsed({});
-      setLoadedFileName(f.name);
-      setSelectedConcept(combined.pyl.find((p) => !p.esGrupo)?.concepto ?? combined.pyl[0]?.concepto ?? "");
-      toast.success(
-        parsed.origen === "gastos"
-          ? `Base de gastos cargada: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
-          : `MATRIX cargada: ${parsed.locales.length} locales`
-      );
-    } catch (e) {
-      console.error(e);
-      toast.error("No se pudo parsear el archivo");
-    }
   };
 
   const isGastos = data.origen === "gastos";
@@ -696,49 +646,12 @@ function Index() {
                     RESET
                   </button>
               </div>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={(e) => {
-                  void handleFile(e.target.files?.[0]);
-                  e.currentTarget.value = "";
-                }}
-              />
-              <input
-                ref={inputRef2}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={(e) => {
-                  void handleFile(e.target.files?.[0], "detallado");
-                  e.currentTarget.value = "";
-                }}
-              />
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="group relative overflow-hidden rounded-lg border border-cyan/40 bg-cyan/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-cyan transition-all hover:bg-cyan/15"
+              <Link
+                to="/documentos"
+                className="rounded-lg border border-white/10 px-4 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-white/30"
               >
-                <span className="absolute inset-0 bg-gradient-to-r from-cyan/0 via-cyan/20 to-cyan/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                <span className="relative flex items-center gap-2">
-                  <Upload className="size-4" />
-                  <span className="hidden sm:inline">CARGAR MATRIX / GASTOS</span>
-                  <span className="sm:hidden">CARGAR</span>
-                </span>
-              </button>
-              <button
-                onClick={() => inputRef2.current?.click()}
-                className="group relative overflow-hidden rounded-lg border border-magenta/40 bg-magenta/5 px-4 lg:px-5 py-2.5 lg:py-3 font-mono text-sm text-magenta transition-all hover:bg-magenta/15"
-                title="Base de gastos con Fecha Servicio + Categoría/Sub-categoría"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-magenta/0 via-magenta/20 to-magenta/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                <span className="relative flex items-center gap-2">
-                  <Upload className="size-4" />
-                  <span className="hidden sm:inline">CARGAR GASTOS DETALLADOS</span>
-                  <span className="sm:hidden">DETALL.</span>
-                </span>
-              </button>
+                Cargar en Documentos
+              </Link>
             </div>
           </header>
 
