@@ -500,24 +500,24 @@ function Index() {
             >
               <div className="flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                <span>Matrix · P&amp;L</span>
+                <span>MATRIX</span>
               </div>
+            </Link>
+            <Link
+              to="/documentos"
+              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            >
+              Documentos
             </Link>
             <Link
               to="/percentages"
               className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
-              % Venta F / NF
-            </Link>
-            <Link
-              to="/vinson"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              VINSON
+              Configuraciones
             </Link>
 
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
-              Entities
+              Entidades
             </div>
             <button
               onClick={() => { setActiveLocal("ALL"); setSidebarOpen(false); }}
@@ -530,7 +530,7 @@ function Index() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                  <span>Grupo · Consolidado</span>
+                  <span>Grupo Consolidado</span>
                 </div>
                 {activeLocal === "ALL" && (
                   <span className="text-[9px] font-mono text-cyan">ACTIVE</span>
@@ -592,14 +592,12 @@ function Index() {
 
           <div className="mt-auto rounded-lg border border-white/10 bg-panel/60 p-3">
             <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
-              Sync · Periodo
+              Sync · Vinson
             </div>
-            <div className="font-mono text-sm">
-              {data.periodo.mes} {data.periodo.anio}
-            </div>
+            <div className="font-mono text-sm">{fmtDate(vinsonLastDate ?? undefined)}</div>
             <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-lime">
               <span className="size-1.5 rounded-full bg-lime" />
-              ONLINE · 12ms
+              ÚLTIMO DATO
             </div>
           </div>
         </aside>
