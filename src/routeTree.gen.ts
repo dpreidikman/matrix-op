@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinsonRouteImport } from './routes/vinson'
 import { Route as PercentagesRouteImport } from './routes/percentages'
 import { Route as DocumentosRouteImport } from './routes/documentos'
+import { Route as AgenteRouteImport } from './routes/agente'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicHooksVinsonDailyRouteImport } from './routes/api/public/hooks/vinson-daily'
 
 const VinsonRoute = VinsonRouteImport.update({
@@ -30,9 +32,19 @@ const DocumentosRoute = DocumentosRouteImport.update({
   path: '/documentos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgenteRoute = AgenteRouteImport.update({
+  id: '/agente',
+  path: '/agente',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicHooksVinsonDailyRoute =
@@ -44,55 +56,69 @@ const ApiPublicHooksVinsonDailyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   id:
     | '__root__'
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgenteRoute: typeof AgenteRoute
   DocumentosRoute: typeof DocumentosRoute
   PercentagesRoute: typeof PercentagesRoute
   VinsonRoute: typeof VinsonRoute
+  ApiChatRoute: typeof ApiChatRoute
   ApiPublicHooksVinsonDailyRoute: typeof ApiPublicHooksVinsonDailyRoute
 }
 
@@ -119,11 +145,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agente': {
+      id: '/agente'
+      path: '/agente'
+      fullPath: '/agente'
+      preLoaderRoute: typeof AgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/vinson-daily': {
@@ -138,9 +178,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgenteRoute: AgenteRoute,
   DocumentosRoute: DocumentosRoute,
   PercentagesRoute: PercentagesRoute,
   VinsonRoute: VinsonRoute,
+  ApiChatRoute: ApiChatRoute,
   ApiPublicHooksVinsonDailyRoute: ApiPublicHooksVinsonDailyRoute,
 }
 export const routeTree = rootRouteImport

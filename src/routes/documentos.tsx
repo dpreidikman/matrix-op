@@ -207,6 +207,7 @@ function Documentos() {
             <Link to="/documentos" className={navLink(true)}>Documentos</Link>
             <Link to="/vinson" className={navLink(false)}>Ventas</Link>
             <Link to="/percentages" className={navLink(false)}>Configuraciones</Link>
+            <Link to="/agente" className={navLink(false)}>Agente</Link>
           </nav>
         </aside>
 
