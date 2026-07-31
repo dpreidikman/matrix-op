@@ -598,7 +598,7 @@ function Index() {
               {data.periodo.mes} {data.periodo.anio}
             </div>
             <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-lime">
-              <span className="size-1.5 rounded-full bg-lime animate-[pulse-glow_1.5s_ease-in-out_infinite] shadow-[0_0_8px_currentColor]" />
+              <span className="size-1.5 rounded-full bg-lime" />
               ONLINE · 12ms
             </div>
           </div>
@@ -619,7 +619,7 @@ function Index() {
                 >
                   <Menu className="size-4" />
                 </button>
-                <h1 className="font-display text-2xl lg:text-3xl font-black tracking-tight text-glow">
+                <h1 className="font-display text-2xl lg:text-3xl font-semibold tracking-tight">
                   {activeLocal === "ALL" ? "MATRIX" : activeLocal.toUpperCase()}
                 </h1>
               </div>
