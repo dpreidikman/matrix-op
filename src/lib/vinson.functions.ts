@@ -352,6 +352,18 @@ export const getVinsonCachedRange = createServerFn({ method: "POST" })
     },
   );
 
+export const getVinsonLastDate = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ date: string | null }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
+      .from("vinson_daily_sales")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return { date: (rows?.[0] as { date: string } | undefined)?.date ?? null };
+  });
+
 export const getVinsonHistory = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({ storeId: z.number().int().positive() }),
