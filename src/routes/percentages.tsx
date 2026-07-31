@@ -15,7 +15,7 @@ import {
 export const Route = createFileRoute("/percentages")({
   head: () => ({
     meta: [
-      { title: "MATRIX // Configuración de % Venta F/NF" },
+      { title: "MATRIX // Configuraciones" },
       { name: "description", content: "Editar porcentajes de Venta F y NF por local y por mes." },
       { property: "og:title", content: "MATRIX // % Venta F/NF" },
       { property: "og:description", content: "Configuración de porcentajes por local y mes." },
@@ -98,7 +98,7 @@ function Percentages() {
           <div className="flex items-start justify-between">
             <div>
               <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-cyan">Modulo</div>
-              <div className="mt-1 text-xl font-bold tracking-tight">% Venta F / NF</div>
+              <div className="mt-1 text-xl font-bold tracking-tight">Configuraciones</div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">
               <X className="size-5" />
@@ -108,14 +108,18 @@ function Percentages() {
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">Módulos</div>
             <Link to="/" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
-              Matrix · P&amp;L
+              MATRIX
+            </Link>
+            <Link to="/documentos" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
+              Documentos
             </Link>
             <Link to="/percentages" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan">
               <div className="flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                <span>% Venta F / NF</span>
+                <span>Configuraciones</span>
               </div>
             </Link>
+            <div className="mt-4 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">Secciones</div>
             <Link to="/vinson" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
               VINSON
             </Link>
