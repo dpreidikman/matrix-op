@@ -122,6 +122,9 @@ function Percentages() {
                 <span>Configuraciones</span>
               </div>
             </Link>
+            <Link to="/agente" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
+              Agente
+            </Link>
           </nav>
         </aside>
 
