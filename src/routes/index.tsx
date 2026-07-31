@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
