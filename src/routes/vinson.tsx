@@ -205,13 +205,19 @@ function VinsonPage() {
               to="/"
               className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
-              Matrix · P&L
+              MATRIX
+            </Link>
+            <Link
+              to="/documentos"
+              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            >
+              Documentos
             </Link>
             <Link
               to="/percentages"
               className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
-              % Venta F / NF
+              Configuraciones
             </Link>
             <Link
               to="/vinson"
