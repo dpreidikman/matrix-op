@@ -13,6 +13,7 @@ import { Route as VinsonRouteImport } from './routes/vinson'
 import { Route as PercentagesRouteImport } from './routes/percentages'
 import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicHooksVinsonDailyRouteImport } from './routes/api/public/hooks/vinson-daily'
 
 const VinsonRoute = VinsonRouteImport.update({
@@ -35,6 +36,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksVinsonDailyRoute =
   ApiPublicHooksVinsonDailyRouteImport.update({
     id: '/api/public/hooks/vinson-daily',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesByTo {
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRoutesById {
@@ -62,6 +70,7 @@ export interface FileRoutesById {
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
+  '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
 }
 export interface FileRouteTypes {
@@ -71,6 +80,7 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -78,6 +88,7 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   id:
     | '__root__'
@@ -85,6 +96,7 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/percentages'
     | '/vinson'
+    | '/api/chat'
     | '/api/public/hooks/vinson-daily'
   fileRoutesById: FileRoutesById
 }
@@ -93,6 +105,7 @@ export interface RootRouteChildren {
   DocumentosRoute: typeof DocumentosRoute
   PercentagesRoute: typeof PercentagesRoute
   VinsonRoute: typeof VinsonRoute
+  ApiChatRoute: typeof ApiChatRoute
   ApiPublicHooksVinsonDailyRoute: typeof ApiPublicHooksVinsonDailyRoute
 }
 
@@ -126,6 +139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/vinson-daily': {
       id: '/api/public/hooks/vinson-daily'
       path: '/api/public/hooks/vinson-daily'
@@ -141,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocumentosRoute: DocumentosRoute,
   PercentagesRoute: PercentagesRoute,
   VinsonRoute: VinsonRoute,
+  ApiChatRoute: ApiChatRoute,
   ApiPublicHooksVinsonDailyRoute: ApiPublicHooksVinsonDailyRoute,
 }
 export const routeTree = rootRouteImport
