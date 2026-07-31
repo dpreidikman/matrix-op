@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload, Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { parseMatrix, parseGastosDetallados, mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
@@ -150,8 +150,6 @@ function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loadedFileName, setLoadedFileName] = useState<string>("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const inputRef2 = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -184,54 +182,6 @@ function Index() {
   const monthLabel = (ym: string) => {
     const [y, m] = ym.split("-").map(Number);
     return `${MES_LABELS[m - 1]} ${y}`;
-  };
-
-  const handleFile = async (f?: File | null, kind: "auto" | "detallado" = "auto") => {
-    if (!f) return;
-    try {
-      const parsed = kind === "detallado" ? await parseGastosDetallados(f) : await parseMatrix(f);
-      // Persistir en el slot correspondiente y mergear con el otro slot si existe
-      let combined: MatrixData = parsed;
-      try {
-        const slot = kind === "detallado" ? STORAGE_KEYS.detallado : STORAGE_KEYS.auto;
-        const otherSlot = kind === "detallado" ? STORAGE_KEYS.auto : STORAGE_KEYS.detallado;
-        localStorage.setItem(slot, JSON.stringify(parsed));
-        localStorage.setItem(STORAGE_KEYS.name, f.name);
-        const otherRaw = localStorage.getItem(otherSlot);
-        if (otherRaw) {
-          const other = JSON.parse(otherRaw) as MatrixData;
-          // Base = MATRIX/semanales (kind auto), overlay = gastos detallados
-          combined =
-            kind === "detallado"
-              ? mergeMatrixData(other, parsed)
-              : mergeMatrixData(parsed, other);
-        }
-      } catch (e) {
-        console.warn("persist save failed", e);
-      }
-      setRawData(ensureSkeletonRows(combined));
-      // Auto-setear rango del período detectado
-      if (combined.gastos?.length) {
-        const dates = combined.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
-        setPeriodFrom(dates[0] ?? "");
-        setPeriodTo(dates[dates.length - 1] ?? "");
-      } else {
-        setPeriodFrom("");
-        setPeriodTo("");
-      }
-      setActiveLocal("ALL");
-      setCollapsed({});
-      setLoadedFileName(f.name);
-      setSelectedConcept(combined.pyl.find((p) => !p.esGrupo)?.concepto ?? combined.pyl[0]?.concepto ?? "");
-      toast.success(
-        parsed.origen === "gastos"
-          ? `Base de gastos cargada: ${parsed.gastos?.length ?? 0} ítems · ${parsed.locales.length} locales`
-          : `MATRIX cargada: ${parsed.locales.length} locales`
-      );
-    } catch (e) {
-      console.error(e);
-      toast.error("No se pudo parsear el archivo");
-    }
   };
 
   const isGastos = data.origen === "gastos";
