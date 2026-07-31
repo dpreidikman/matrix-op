@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinsonRouteImport } from './routes/vinson'
 import { Route as PercentagesRouteImport } from './routes/percentages'
 import { Route as DocumentosRouteImport } from './routes/documentos'
+import { Route as AgenteRouteImport } from './routes/agente'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicHooksVinsonDailyRouteImport } from './routes/api/public/hooks/vinson-daily'
@@ -29,6 +30,11 @@ const PercentagesRoute = PercentagesRouteImport.update({
 const DocumentosRoute = DocumentosRouteImport.update({
   id: '/documentos',
   path: '/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgenteRoute = AgenteRouteImport.update({
+  id: '/agente',
+  path: '/agente',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -50,6 +56,7 @@ const ApiPublicHooksVinsonDailyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
@@ -67,6 +75,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agente': typeof AgenteRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
   '/vinson': typeof VinsonRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agente'
     | '/documentos'
     | '/percentages'
     | '/vinson'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgenteRoute: typeof AgenteRoute
   DocumentosRoute: typeof DocumentosRoute
   PercentagesRoute: typeof PercentagesRoute
   VinsonRoute: typeof VinsonRoute
@@ -132,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agente': {
+      id: '/agente'
+      path: '/agente'
+      fullPath: '/agente'
+      preLoaderRoute: typeof AgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgenteRoute: AgenteRoute,
   DocumentosRoute: DocumentosRoute,
   PercentagesRoute: PercentagesRoute,
   VinsonRoute: VinsonRoute,
