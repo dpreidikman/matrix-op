@@ -468,6 +468,12 @@ function Index() {
               Documentos
             </Link>
             <Link
+              to="/vinson"
+              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            >
+              Ventas
+            </Link>
+            <Link
               to="/percentages"
               className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >

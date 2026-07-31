@@ -205,6 +205,7 @@ function Documentos() {
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">Módulos</div>
             <Link to="/" className={navLink(false)}>MATRIX</Link>
             <Link to="/documentos" className={navLink(true)}>Documentos</Link>
+            <Link to="/vinson" className={navLink(false)}>Ventas</Link>
             <Link to="/percentages" className={navLink(false)}>Configuraciones</Link>
           </nav>
         </aside>

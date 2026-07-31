@@ -214,23 +214,23 @@ function VinsonPage() {
               Documentos
             </Link>
             <Link
+              to="/vinson"
+              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan"
+            >
+              <div className="flex items-center gap-2">
+                <span className="size-1.5 rounded-full bg-cyan" />
+                <span>Ventas</span>
+              </div>
+            </Link>
+            <Link
               to="/percentages"
               className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
               Configuraciones
             </Link>
-            <Link
-              to="/vinson"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan"
-            >
-              <div className="flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                <span>VINSON</span>
-              </div>
-            </Link>
 
             <div className="mt-4 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">
-              Tiendas
+              Vinson · Tiendas
             </div>
             {STORES.map((s) => (
               <button
