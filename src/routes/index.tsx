@@ -450,13 +450,8 @@ function Index() {
 
   return (
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
-      {/* Ambient grid + glow */}
-      <div className="pointer-events-none fixed inset-0 grid-bg opacity-40" />
-      <div className="pointer-events-none fixed -top-40 -right-40 size-[600px] rounded-full bg-cyan/20 blur-3xl" />
-      <div className="pointer-events-none fixed -bottom-60 -left-40 size-[700px] rounded-full bg-magenta/15 blur-3xl" />
-      <div className="pointer-events-none fixed inset-0 overflow-hidden opacity-[0.07]">
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan to-transparent animate-[scanline_8s_linear_infinite]" />
-      </div>
+      {/* Ambient grid */}
+      <div className="pointer-events-none fixed inset-0 grid-bg opacity-30" />
 
       <div className="relative flex min-h-screen">
         {/* Mobile sidebar overlay */}
