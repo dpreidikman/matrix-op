@@ -1,8 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Menu, X, Save, RotateCcw, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { AppNav } from "@/components/AppNav";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import {
   DEFAULT_PCT,
   PCT_LOCALS,
@@ -105,6 +107,7 @@ function Percentages() {
   }, [cfg]);
 
   return (
+    <RequireAdmin>
     <div className="relative min-h-screen bg-background text-foreground font-sans overflow-hidden">
       <div className="pointer-events-none fixed inset-0 grid-bg opacity-30" />
             
@@ -129,25 +132,7 @@ function Percentages() {
           </div>
 
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">Módulos</div>
-            <Link to="/" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
-              MATRIX
-            </Link>
-            <Link to="/documentos" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
-              Documentos
-            </Link>
-            <Link to="/vinson" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
-              Ventas
-            </Link>
-            <Link to="/percentages" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan">
-              <div className="flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                <span>Configuraciones</span>
-              </div>
-            </Link>
-            <Link to="/agente" className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground">
-              Agente
-            </Link>
+            <AppNav active="/percentages" />
           </nav>
         </aside>
 
@@ -252,7 +237,7 @@ function Percentages() {
                               </button>
                             </div>
                           </td>
-                          <td className={`px-4 py-2 text-right font-mono text-xs ${sum > 120 ? "text-magenta" : "text-muted-foreground"}`}>
+                          <td className={`px-4 py-2 text-right font-mono text-xs ${Math.abs(sum - 100) > 0.01 ? "text-red-500 font-semibold" : "text-muted-foreground"}`}>
                             {sum.toFixed(2)}%
                           </td>
                         </tr>
@@ -269,5 +254,6 @@ function Percentages() {
       </div>
       <Toaster />
     </div>
+    </RequireAdmin>
   );
 }

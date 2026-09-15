@@ -6,7 +6,6 @@
 // el contenido de este archivo manteniendo la firma `parseMatrix(file)`.
 
 import * as XLSX from "xlsx";
-import { loadCategoryOverrides, normalizeCategoriaKey, type CategoryOverrides } from "./categoryOverrides";
 
 export type Periodo = { mes: string; anio: number | string };
 export type LocalKey = string;
@@ -51,6 +50,7 @@ export type MatrixData = {
 };
 
 export type GastoRow = {
+  id?: string;
   local: LocalKey;
   fechaPago: string; // ISO yyyy-mm-dd
   fecha?: string;
@@ -84,6 +84,11 @@ const localKey = (s: unknown) =>
   normalize(s)
     .replace(/costa\s*gral/g, "costa7070")
     .replace(/[^a-z0-9]/g, "");
+
+const cryptoRandomId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
 
 // Combina dos MatrixData (típicamente: matrix como base + gastos detallados como overlay).
 // - Union de locales
@@ -481,6 +486,63 @@ export const MATRIX_SKELETON: SkelItem[] = [
   { concepto: "MARGEN DE GANANCIA ESTIMADO", parent: null, esSubtotal: true },
 ];
 
+// Arma el pyl (por concepto y por grupo padre) a partir de una lista de
+// gastos ya mapeados a un concepto del esqueleto (g.grupo).
+// - Para un concepto HOJA (tiene padre): usa lo cargado directo a ese concepto.
+// - Para un concepto de PRIMER NIVEL (padre null, ej. CMV, IMPUESTOS,
+//   COSTO LABORAL): suma sus hijos MÁS lo que se haya cargado directo a ese
+//   mismo concepto (ej. carga manual, o un gasto sin desglose por sub-ítem).
+export function buildPyl(
+  gastos: GastoRow[],
+  skeleton: SkelItem[],
+  locales: LocalKey[],
+  excluidosDeTotal: LocalKey[] = [],
+): PyLRow[] {
+  const excluded = new Set(excluidosDeTotal);
+  const emptyPorLocal = (): Record<string, number> => Object.fromEntries(locales.map((l) => [l, 0]));
+
+  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const g of gastos) {
+    if (!perConcepto.has(g.grupo)) perConcepto.set(g.grupo, { porLocal: emptyPorLocal(), total: 0 });
+    const acc = perConcepto.get(g.grupo)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
+  }
+
+  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const it of skeleton) {
+    if (!it.parent) continue;
+    const acc = perConcepto.get(it.concepto);
+    if (!acc) continue;
+    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
+    const p = parentAgg.get(it.parent)!;
+    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
+    p.total += acc.total;
+  }
+
+  return skeleton.map((it) => {
+    const direct = perConcepto.get(it.concepto);
+    if (it.parent) {
+      return {
+        concepto: it.concepto,
+        grupo: it.parent,
+        porLocal: direct?.porLocal ?? emptyPorLocal(),
+        total: direct?.total ?? 0,
+        esGrupo: it.esGrupo,
+        esSubtotal: it.esSubtotal,
+      };
+    }
+    const fromChildren = parentAgg.get(it.concepto);
+    const porLocal = { ...(fromChildren?.porLocal ?? emptyPorLocal()) };
+    let total = fromChildren?.total ?? 0;
+    if (direct) {
+      for (const [loc, v] of Object.entries(direct.porLocal)) porLocal[loc] = (porLocal[loc] ?? 0) + v;
+      total += direct.total;
+    }
+    return { concepto: it.concepto, porLocal, total, esGrupo: it.esGrupo, esSubtotal: it.esSubtotal };
+  });
+}
+
 // Mapea imputación del archivo de gastos → concepto exacto del esqueleto matrix
 function conceptoDeImputacion(imp: string): string {
   const n = normalize(imp);
@@ -608,51 +670,10 @@ function parseGastosWorkbook(wb: XLSX.WorkBook, file: File): MatrixData | null {
   const extra = [...localesSet].filter((l) => !orden.includes(l));
   const locales = [...orden, ...extra];
   const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
-  const excluded = new Set(excluidosDeTotal);
 
   // Construir P&L con ESTRUCTURA COMPLETA de la matriz (todas las subcategorías,
   // aunque estén vacías). Solo se completan las filas mapeadas desde gastos.
-  const emptyPorLocal = (): Record<string, number> => {
-    const o: Record<string, number> = {};
-    for (const l of locales) o[l] = 0;
-    return o;
-  };
-
-  // Aggregar gastos por concepto destino
-  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const g of gastos) {
-    const key = g.grupo; // ya mapeado a concepto del esqueleto
-    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
-    const acc = perConcepto.get(key)!;
-    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) acc.total += g.monto;
-  }
-
-  // Sumas por padre (grupo) a partir de sus hijos
-  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const it of MATRIX_SKELETON) {
-    if (!it.parent) continue;
-    const acc = perConcepto.get(it.concepto);
-    if (!acc) continue;
-    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
-    const p = parentAgg.get(it.parent)!;
-    for (const [loc, v] of Object.entries(acc.porLocal)) {
-      p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
-    }
-    p.total += acc.total;
-  }
-
-  const pyl: PyLRow[] = MATRIX_SKELETON.map((it) => {
-    const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
-    return {
-      concepto: it.concepto,
-      grupo: it.parent ?? undefined,
-      porLocal: data?.porLocal ?? emptyPorLocal(),
-      total: data?.total ?? 0,
-      esGrupo: it.esGrupo,
-      esSubtotal: it.esSubtotal,
-    };
-  });
+  const pyl: PyLRow[] = buildPyl(gastos, MATRIX_SKELETON, locales, excluidosDeTotal);
 
   // KPIs con la MISMA estructura que MATRIX, todo en 0
   const kpis: KPI[] = [
@@ -718,40 +739,8 @@ export function filterMatrixByPeriod(
     if (!isFinite(ts)) return true;
     return ts >= f && ts <= t;
   });
-  const locales = base.locales;
-  const excluded = new Set(base.excluidosDeTotal ?? []);
-  const emptyPorLocal = (): Record<string, number> =>
-    Object.fromEntries(locales.map((l) => [l, 0]));
-  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const g of gastos) {
-    const key = g.grupo;
-    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
-    const acc = perConcepto.get(key)!;
-    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) acc.total += g.monto;
-  }
-  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
   const skel = base.skeleton ?? MATRIX_SKELETON;
-  for (const it of skel) {
-    if (!it.parent) continue;
-    const acc = perConcepto.get(it.concepto);
-    if (!acc) continue;
-    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
-    const p = parentAgg.get(it.parent)!;
-    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
-    p.total += acc.total;
-  }
-  const pyl: PyLRow[] = skel.map((it) => {
-    const data = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
-    return {
-      concepto: it.concepto,
-      grupo: it.parent ?? undefined,
-      porLocal: data?.porLocal ?? emptyPorLocal(),
-      total: data?.total ?? 0,
-      esGrupo: it.esGrupo,
-      esSubtotal: it.esSubtotal,
-    };
-  });
+  const pyl: PyLRow[] = buildPyl(gastos, skel, base.locales, base.excluidosDeTotal ?? []);
   return { ...base, pyl, gastos };
 }
 
@@ -768,20 +757,12 @@ const CAT_SIN_SUB_LABEL: Record<string, string> = {
 };
 
 // Mapea (Categoria, Sub-categoria) → concepto EXACTO del esqueleto matrix.
-// Si el usuario categorizó manualmente esta "Categoria" (sin sub) desde la UI,
-// esa regla tiene prioridad sobre el mapeo automático.
 function mapCatSubToConcept(
   cat: string,
   sub: string | null | undefined,
-  overrides?: CategoryOverrides,
 ): { concepto: string; parent?: string } {
   const c = normalize(cat);
   const s = sub ? normalize(sub).replace(/\s+/g, " ").trim() : "";
-
-  if (!s) {
-    const override = overrides?.[normalizeCategoriaKey(cat)];
-    if (override) return { concepto: override };
-  }
 
   // Excepción: Mantenimiento → siempre MANTENIMIENTO LOCALES
   if (/mantenimient/.test(c)) return { concepto: "MANTENIMIENTO LOCALES" };
@@ -906,7 +887,6 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
   const cProv = col(/proveedor/);
   if (cLocal < 0 || cCat < 0 || cSub < 0 || (cMontoN < 0 && cMontoB < 0)) return null;
 
-  const overrides = loadCategoryOverrides();
   const sinCatSeen = new Set<string>();
   const gastos: GastoRow[] = [];
   const localesSet = new Set<string>();
@@ -919,10 +899,11 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
     if (!local || !cat || !monto) continue;
     const fsrv = toDate(row[cFechaSrv]);
     const fpago = cFechaPago >= 0 ? toDate(row[cFechaPago]) : null;
-    const dest = mapCatSubToConcept(cat, sub || null, overrides);
+    const dest = mapCatSubToConcept(cat, sub || null);
     if (dest.parent === "SIN CATEGORIA") sinCatSeen.add(dest.concepto);
     localesSet.add(local);
     gastos.push({
+      id: cryptoRandomId(),
       local,
       fechaPago: toISO(fsrv), // fecha de servicio (para filtro por período)
       fecha: fpago ? toISO(fpago) : undefined,
@@ -954,45 +935,7 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
     ...[...sinCatSeen].sort().map((c) => ({ concepto: c, parent: "SIN CATEGORIA" } as SkelItem)),
   ];
 
-  const excluded = new Set(excluidosDeTotal);
-  const emptyPorLocal = (): Record<string, number> => {
-    const o: Record<string, number> = {};
-    for (const l of locales) o[l] = 0;
-    return o;
-  };
-
-  // Aggregar
-  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const g of gastos) {
-    const key = g.grupo;
-    if (!perConcepto.has(key)) perConcepto.set(key, { porLocal: emptyPorLocal(), total: 0 });
-    const acc = perConcepto.get(key)!;
-    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) acc.total += g.monto;
-  }
-
-  // Sumas por padre
-  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const it of skeleton) {
-    if (!it.parent) continue;
-    const acc = perConcepto.get(it.concepto);
-    if (!acc) continue;
-    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
-    const p = parentAgg.get(it.parent)!;
-    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
-    p.total += acc.total;
-  }
-  const pyl: PyLRow[] = skeleton.map((it) => {
-    const d = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
-    return {
-      concepto: it.concepto,
-      grupo: it.parent ?? undefined,
-      porLocal: d?.porLocal ?? emptyPorLocal(),
-      total: d?.total ?? 0,
-      esGrupo: it.esGrupo,
-      esSubtotal: it.esSubtotal,
-    };
-  });
+  const pyl: PyLRow[] = buildPyl(gastos, skeleton, locales, excluidosDeTotal);
 
   // Periodo desde la fecha de servicio más frecuente
   let mes = "", anio: number | string = new Date().getFullYear();
@@ -1038,61 +981,34 @@ export async function parseGastosDetallados(file: File): Promise<MatrixData> {
   return parsed;
 }
 
-// Vuelve a agrupar los gastos "SIN CATEGORIA" de datos YA cargados, aplicando
-// las reglas de categorización manual (por "Categoria" original). Se usa cuando
-// el usuario asigna una categoría desde la UI, para no tener que re-subir el archivo.
-export function reclassifyGastos(data: MatrixData, overrides?: CategoryOverrides): MatrixData {
-  if (!data.gastos?.length) return data;
-  const rules = overrides ?? loadCategoryOverrides();
+// Reconstruye el pyl (por concepto y por grupo padre) a partir de una lista
+// de gastos y el esqueleto de conceptos, para reflejar cambios de categoría.
+export function rebuildPylFromGastos(data: MatrixData, gastos: GastoRow[]): MatrixData {
   const skeleton = data.skeleton ?? MATRIX_SKELETON;
-  const sinCatBuckets = new Set(skeleton.filter((it) => it.parent === "SIN CATEGORIA").map((it) => it.concepto));
-
-  const gastos = data.gastos.map((g) => {
-    if (!sinCatBuckets.has(g.grupo)) return g;
-    const target = rules[normalizeCategoriaKey(g.imputacion)];
-    return target ? { ...g, grupo: target } : g;
-  });
-
-  const locales = data.locales;
-  const excluded = new Set(data.excluidosDeTotal ?? []);
-  const emptyPorLocal = (): Record<string, number> => Object.fromEntries(locales.map((l) => [l, 0]));
-
-  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const g of gastos) {
-    if (!perConcepto.has(g.grupo)) perConcepto.set(g.grupo, { porLocal: emptyPorLocal(), total: 0 });
-    const acc = perConcepto.get(g.grupo)!;
-    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
-    if (!excluded.has(g.local)) acc.total += g.monto;
-  }
-  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
-  for (const it of skeleton) {
-    if (!it.parent) continue;
-    const acc = perConcepto.get(it.concepto);
-    if (!acc) continue;
-    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
-    const p = parentAgg.get(it.parent)!;
-    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
-    p.total += acc.total;
-  }
-  const pyl: PyLRow[] = skeleton.map((it) => {
-    const d = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
-    return {
-      concepto: it.concepto,
-      grupo: it.parent ?? undefined,
-      porLocal: d?.porLocal ?? emptyPorLocal(),
-      total: d?.total ?? 0,
-      esGrupo: it.esGrupo,
-      esSubtotal: it.esSubtotal,
-    };
-  });
-
+  const pyl: PyLRow[] = buildPyl(gastos, skeleton, data.locales, data.excluidosDeTotal ?? []);
   return { ...data, gastos, pyl, skeleton };
+}
+
+// Reasigna la categoría de UN gasto puntual (por id) — la recategorización es
+// por ítem individual, no por bloque. Recalcula el pyl con la nueva
+// distribución y persiste el cambio en el propio MatrixData.
+export function reasignarCategoriaGasto(data: MatrixData, gastoId: string, concepto: string): MatrixData {
+  if (!data.gastos?.length) return data;
+  const gastos = data.gastos.map((g) => (g.id === gastoId ? { ...g, grupo: concepto } : g));
+  return rebuildPylFromGastos(data, gastos);
 }
 
 // Concepto destino → categoría origen (grupo padre) legible, para armar el
 // selector de categorías del panel de "SIN CATEGORIA".
 export function listaConceptosCategorizables(): Array<{ parent: string; concepto: string }> {
   return MATRIX_SKELETON.filter((it) => it.parent).map((it) => ({ parent: it.parent!, concepto: it.concepto }));
+}
+
+// Todos los conceptos del esqueleto (ventas, ingresos y gastos, hojas y
+// totales de primer nivel), agrupados por su padre — para elegir qué
+// proyectar en la pantalla de Proyecciones.
+export function listaConceptosProyectables(): Array<{ parent: string; concepto: string }> {
+  return MATRIX_SKELETON.map((it) => ({ parent: it.parent ?? "TOTALES", concepto: it.concepto }));
 }
 
 // Demo data para mostrar el dashboard sin archivo cargado

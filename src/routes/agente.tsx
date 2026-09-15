@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +18,7 @@ import {
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { AppNav } from "@/components/AppNav";
 import { mergeMatrixData, type MatrixData } from "@/lib/matrixParser";
 import { loadPctConfig } from "@/lib/pctConfig";
 import { getVinsonHistory, VINSON_STORES } from "@/lib/vinson.functions";
@@ -41,13 +42,6 @@ export const Route = createFileRoute("/agente")({
   }),
   component: AgentePage,
 });
-
-const navLink = (active: boolean) =>
-  `text-left px-3 py-2.5 rounded-md text-sm font-medium border ${
-    active
-      ? "bg-cyan/10 border-cyan/30 text-cyan"
-      : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-  }`;
 
 const money = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
 
@@ -235,14 +229,7 @@ function AgentePage() {
             </button>
           </div>
           <nav className="flex flex-col gap-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
-              Módulos
-            </div>
-            <Link to="/" className={navLink(false)}>MATRIX</Link>
-            <Link to="/documentos" className={navLink(false)}>Documentos</Link>
-            <Link to="/vinson" className={navLink(false)}>Ventas</Link>
-            <Link to="/percentages" className={navLink(false)}>Configuraciones</Link>
-            <Link to="/agente" className={navLink(true)}>Agente</Link>
+            <AppNav active="/agente" />
           </nav>
         </aside>
 

@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Activity, Menu, X, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { AppNav } from "@/components/AppNav";
 import {
   getVinsonHistory,
   syncVinsonRange,
@@ -198,42 +199,7 @@ function VinsonPage() {
           </div>
 
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
-              Módulos
-            </div>
-            <Link
-              to="/"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              MATRIX
-            </Link>
-            <Link
-              to="/documentos"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Documentos
-            </Link>
-            <Link
-              to="/vinson"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan"
-            >
-              <div className="flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-cyan" />
-                <span>Ventas</span>
-              </div>
-            </Link>
-            <Link
-              to="/percentages"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Configuraciones
-            </Link>
-            <Link
-              to="/agente"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Agente
-            </Link>
+            <AppNav active="/vinson" />
 
             <div className="mt-4 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">
               Vinson · Tiendas

@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Zap, TrendingUp, AlertTriangle, Menu, X, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { mergeMatrixData, demoData, filterMatrixByPeriod, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { mergeMatrixData, demoData, filterMatrixByPeriod, rebuildPylFromGastos, MATRIX_SKELETON, type GastoRow, type MatrixData } from "@/lib/matrixParser";
+import { loadManualEntries, manualEntriesToGastos, type ManualEntry } from "@/lib/manualEntries";
+import { AppNav } from "@/components/AppNav";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
@@ -111,6 +113,7 @@ function Index() {
   const [rawData, setRawData] = useState<MatrixData>(demoData);
   const [otrosOverrides, setOtrosOverrides] = useState<Record<string, number>>({});
   const [pctCfg, setPctCfg] = useState<PctConfig>({});
+  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([]);
   useEffect(() => {
     const p = loadPersisted();
     if (p) {
@@ -118,11 +121,8 @@ function Index() {
       setLoadedFileName(p.name);
       setActiveLocal("ALL");
       setSelectedConcept(p.data.pyl.find((r) => !r.esGrupo)?.concepto ?? p.data.pyl[0]?.concepto ?? "");
-      if (p.data.gastos?.length) {
-        const dates = p.data.gastos.map((g) => g.fechaPago).filter(Boolean).sort();
-        setPeriodFrom(dates[0] ?? "");
-        setPeriodTo(dates[dates.length - 1] ?? "");
-      }
+      // El período por defecto es 01/01/2026 → hoy (ya seteado en el estado
+      // inicial); no lo pisamos con el rango de fechas del archivo cargado.
     }
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.otros);
@@ -131,7 +131,16 @@ function Index() {
       console.warn("otros load failed", e);
     }
     setPctCfg(loadPctConfig());
+    setManualEntries(loadManualEntries());
   }, []);
+  // Integra la carga manual (Otros Ingresos, CMV, Costo Laboral, etc.) como
+  // si fueran gastos más, para que aparezcan en el P&L junto a lo cargado
+  // por archivo.
+  const rawDataWithManual = useMemo(() => {
+    if (!manualEntries.length) return rawData;
+    const gastos = [...(rawData.gastos ?? []), ...manualEntriesToGastos(manualEntries)];
+    return rebuildPylFromGastos({ ...rawData, gastos: rawData.gastos ?? [] }, gastos);
+  }, [rawData, manualEntries]);
   const setOtros = (local: string, val: number) => {
     setOtrosOverrides((s) => {
       const next = { ...s, [local]: val };
@@ -139,11 +148,15 @@ function Index() {
       return next;
     });
   };
-  const [periodFrom, setPeriodFrom] = useState<string>("");
-  const [periodTo, setPeriodTo] = useState<string>("");
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const [periodFrom, setPeriodFrom] = useState<string>("2026-01-01");
+  const [periodTo, setPeriodTo] = useState<string>(todayISO());
   const data = useMemo(
-    () => (rawData.gastos?.length ? filterMatrixByPeriod(rawData, periodFrom, periodTo) : rawData),
-    [rawData, periodFrom, periodTo],
+    () =>
+      rawDataWithManual.gastos?.length
+        ? filterMatrixByPeriod(rawDataWithManual, periodFrom, periodTo)
+        : rawDataWithManual,
+    [rawDataWithManual, periodFrom, periodTo],
   );
   const [activeLocal, setActiveLocal] = useState<string>("ALL");
   const [selectedConcept, setSelectedConcept] = useState<string>(demoData.pyl[1]?.concepto ?? "");
@@ -157,14 +170,14 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
-  // Meses disponibles según fechas de pago del archivo cargado
+  // Meses disponibles según fechas de pago del archivo cargado (+ carga manual)
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
-    for (const g of rawData.gastos ?? []) {
+    for (const g of rawDataWithManual.gastos ?? []) {
       if (g.fechaPago && /^\d{4}-\d{2}/.test(g.fechaPago)) set.add(g.fechaPago.slice(0, 7));
     }
     return [...set].sort();
-  }, [rawData.gastos]);
+  }, [rawDataWithManual.gastos]);
 
   const monthRange = (ym: string): [string, string] => {
     const [y, m] = ym.split("-").map(Number);
@@ -449,42 +462,7 @@ function Index() {
           </div>
 
           <nav className="flex flex-col gap-1 overflow-y-auto pr-1 -mr-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
-              Módulos
-            </div>
-            <Link
-              to="/"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan"
-            >
-              <div className="flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-cyan animate-pulse" />
-                <span>MATRIX</span>
-              </div>
-            </Link>
-            <Link
-              to="/documentos"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Documentos
-            </Link>
-            <Link
-              to="/vinson"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Ventas
-            </Link>
-            <Link
-              to="/percentages"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Configuraciones
-            </Link>
-            <Link
-              to="/agente"
-              className="text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-            >
-              Agente
-            </Link>
+            <AppNav active="/" />
 
             <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">
               Entidades

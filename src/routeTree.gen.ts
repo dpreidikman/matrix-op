@@ -10,8 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VinsonRouteImport } from './routes/vinson'
+import { Route as UsuariosRouteImport } from './routes/usuarios'
+import { Route as ProyeccionesRouteImport } from './routes/proyecciones'
 import { Route as PercentagesRouteImport } from './routes/percentages'
 import { Route as DocumentosRouteImport } from './routes/documentos'
+import { Route as CargaManualRouteImport } from './routes/carga-manual'
 import { Route as AgenteRouteImport } from './routes/agente'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
@@ -22,6 +25,16 @@ const VinsonRoute = VinsonRouteImport.update({
   path: '/vinson',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProyeccionesRoute = ProyeccionesRouteImport.update({
+  id: '/proyecciones',
+  path: '/proyecciones',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PercentagesRoute = PercentagesRouteImport.update({
   id: '/percentages',
   path: '/percentages',
@@ -30,6 +43,11 @@ const PercentagesRoute = PercentagesRouteImport.update({
 const DocumentosRoute = DocumentosRouteImport.update({
   id: '/documentos',
   path: '/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CargaManualRoute = CargaManualRouteImport.update({
+  id: '/carga-manual',
+  path: '/carga-manual',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgenteRoute = AgenteRouteImport.update({
@@ -57,8 +75,11 @@ const ApiPublicHooksVinsonDailyRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agente': typeof AgenteRoute
+  '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
+  '/proyecciones': typeof ProyeccionesRoute
+  '/usuarios': typeof UsuariosRoute
   '/vinson': typeof VinsonRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
@@ -66,8 +87,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agente': typeof AgenteRoute
+  '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
+  '/proyecciones': typeof ProyeccionesRoute
+  '/usuarios': typeof UsuariosRoute
   '/vinson': typeof VinsonRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
@@ -76,8 +100,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agente': typeof AgenteRoute
+  '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
   '/percentages': typeof PercentagesRoute
+  '/proyecciones': typeof ProyeccionesRoute
+  '/usuarios': typeof UsuariosRoute
   '/vinson': typeof VinsonRoute
   '/api/chat': typeof ApiChatRoute
   '/api/public/hooks/vinson-daily': typeof ApiPublicHooksVinsonDailyRoute
@@ -87,8 +114,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agente'
+    | '/carga-manual'
     | '/documentos'
     | '/percentages'
+    | '/proyecciones'
+    | '/usuarios'
     | '/vinson'
     | '/api/chat'
     | '/api/public/hooks/vinson-daily'
@@ -96,8 +126,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agente'
+    | '/carga-manual'
     | '/documentos'
     | '/percentages'
+    | '/proyecciones'
+    | '/usuarios'
     | '/vinson'
     | '/api/chat'
     | '/api/public/hooks/vinson-daily'
@@ -105,8 +138,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/agente'
+    | '/carga-manual'
     | '/documentos'
     | '/percentages'
+    | '/proyecciones'
+    | '/usuarios'
     | '/vinson'
     | '/api/chat'
     | '/api/public/hooks/vinson-daily'
@@ -115,8 +151,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgenteRoute: typeof AgenteRoute
+  CargaManualRoute: typeof CargaManualRoute
   DocumentosRoute: typeof DocumentosRoute
   PercentagesRoute: typeof PercentagesRoute
+  ProyeccionesRoute: typeof ProyeccionesRoute
+  UsuariosRoute: typeof UsuariosRoute
   VinsonRoute: typeof VinsonRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiPublicHooksVinsonDailyRoute: typeof ApiPublicHooksVinsonDailyRoute
@@ -131,6 +170,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VinsonRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/proyecciones': {
+      id: '/proyecciones'
+      path: '/proyecciones'
+      fullPath: '/proyecciones'
+      preLoaderRoute: typeof ProyeccionesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/percentages': {
       id: '/percentages'
       path: '/percentages'
@@ -143,6 +196,13 @@ declare module '@tanstack/react-router' {
       path: '/documentos'
       fullPath: '/documentos'
       preLoaderRoute: typeof DocumentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carga-manual': {
+      id: '/carga-manual'
+      path: '/carga-manual'
+      fullPath: '/carga-manual'
+      preLoaderRoute: typeof CargaManualRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agente': {
@@ -179,8 +239,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgenteRoute: AgenteRoute,
+  CargaManualRoute: CargaManualRoute,
   DocumentosRoute: DocumentosRoute,
   PercentagesRoute: PercentagesRoute,
+  ProyeccionesRoute: ProyeccionesRoute,
+  UsuariosRoute: UsuariosRoute,
   VinsonRoute: VinsonRoute,
   ApiChatRoute: ApiChatRoute,
   ApiPublicHooksVinsonDailyRoute: ApiPublicHooksVinsonDailyRoute,

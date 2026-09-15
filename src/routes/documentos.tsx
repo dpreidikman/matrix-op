@@ -1,18 +1,20 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Menu, X, Upload, FileSpreadsheet, Trash2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { AppNav } from "@/components/AppNav";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import {
   parseMatrix,
   parseGastosDetallados,
   mergeMatrixData,
-  reclassifyGastos,
+  reasignarCategoriaGasto,
   listaConceptosCategorizables,
   MATRIX_SKELETON,
   type MatrixData,
+  type GastoRow,
 } from "@/lib/matrixParser";
-import { setCategoryOverride } from "@/lib/categoryOverrides";
 
 export const Route = createFileRoute("/documentos")({
   head: () => ({
@@ -39,12 +41,6 @@ type DocMeta = { name: string; at: string; rows: number; locales: number };
 type MetaMap = Partial<Record<"A" | "B", DocMeta>>;
 
 const fmtMoney = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
-
-function navLink(active: boolean) {
-  return active
-    ? "text-left px-3 py-2.5 rounded-md text-sm font-medium border bg-cyan/10 border-cyan/30 text-cyan"
-    : "text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground";
-}
 
 // Detecta automáticamente qué tipo de planilla es (resumen MATRIX o gastos
 // detallados con Categoría/Sub-categoría) para que el usuario no tenga que
@@ -147,22 +143,13 @@ function Documentos() {
     const total = gastos.reduce((s, g) => s + g.monto, 0);
     const dates = gastos.map((g) => g.fechaPago).filter(Boolean).sort();
 
-    // Buckets "SIN CATEGORIA": agrupados por la Categoria original del archivo
-    // (imputacion), para poder asignarles un concepto real desde la UI.
+    // Gastos "SIN CATEGORIA": se listan uno por uno (no agrupados), porque la
+    // categorización es por ítem individual.
     const skeleton = combined.skeleton ?? MATRIX_SKELETON;
     const sinCatBuckets = new Set(skeleton.filter((it) => it.parent === "SIN CATEGORIA").map((it) => it.concepto));
-    const byCategoriaOriginal = new Map<string, { grupo: string; total: number; count: number }>();
-    for (const g of gastos) {
-      if (!sinCatBuckets.has(g.grupo)) continue;
-      const key = g.imputacion || "SIN DATO";
-      const acc = byCategoriaOriginal.get(key) ?? { grupo: g.grupo, total: 0, count: 0 };
-      acc.total += g.monto;
-      acc.count += 1;
-      byCategoriaOriginal.set(key, acc);
-    }
-    const sinCategoria = [...byCategoriaOriginal.entries()]
-      .map(([categoria, v]) => ({ categoria, ...v }))
-      .sort((a, b) => b.total - a.total);
+    const sinCategoria = gastos
+      .filter((g) => sinCatBuckets.has(g.grupo) && g.id)
+      .sort((a, b) => b.monto - a.monto);
 
     return {
       total,
@@ -186,13 +173,12 @@ function Documentos() {
     return [...byParent.entries()];
   }, []);
 
-  const categorizar = (categoriaOriginal: string, concepto: string) => {
-    if (!concepto || !dataB) return;
-    setCategoryOverride(categoriaOriginal, concepto);
-    const next = reclassifyGastos(dataB);
+  const categorizar = (gasto: GastoRow, concepto: string) => {
+    if (!concepto || !dataB || !gasto.id) return;
+    const next = reasignarCategoriaGasto(dataB, gasto.id, concepto);
     localStorage.setItem(KEYS.B, JSON.stringify(next));
     setDataB(next);
-    toast.success(`"${categoriaOriginal}" → ${concepto}`);
+    toast.success(`"${gasto.concepto}" → ${concepto}`);
   };
 
   const StatusRow = ({ slot, title }: { slot: "A" | "B"; title: string }) => {
@@ -225,6 +211,7 @@ function Documentos() {
   };
 
   return (
+    <RequireAdmin>
     <div className="relative min-h-screen bg-background text-foreground font-sans">
       <div className="relative flex min-h-screen">
         {sidebarOpen && (
@@ -245,12 +232,7 @@ function Documentos() {
             </button>
           </div>
           <nav className="flex flex-col gap-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-2">Módulos</div>
-            <Link to="/" className={navLink(false)}>MATRIX</Link>
-            <Link to="/documentos" className={navLink(true)}>Documentos</Link>
-            <Link to="/vinson" className={navLink(false)}>Ventas</Link>
-            <Link to="/percentages" className={navLink(false)}>Configuraciones</Link>
-            <Link to="/agente" className={navLink(false)}>Agente</Link>
+            <AppNav active="/documentos" />
           </nav>
         </aside>
 
@@ -357,29 +339,29 @@ function Documentos() {
                   <h2 className="font-mono uppercase tracking-wider text-sm">Sin categorizar</h2>
                 </div>
                 <span className="font-mono text-[10px] text-muted-foreground">
-                  {analysis.sinCategoria.length} categoría(s) del archivo sin mapear
+                  {analysis.sinCategoria.length} gasto(s) sin mapear
                 </span>
               </header>
               <p className="px-5 pt-4 text-xs text-muted-foreground">
-                Estas categorías vinieron sin sub-categoría en el documento de gastos detallados.
-                Elegí a qué concepto de la Matrix pertenecen; se va a aplicar a todos los ítems con esa
-                categoría (en este archivo y en los que subas después).
+                Estos gastos vinieron sin sub-categoría en el documento de gastos detallados.
+                Categorizalos uno por uno eligiendo el concepto real de la Matrix.
               </p>
-              <div className="p-5 pt-3 space-y-2">
-                {analysis.sinCategoria.map((row) => (
+              <div className="max-h-[28rem] overflow-y-auto scrollbar-cyan p-5 pt-3 space-y-2">
+                {analysis.sinCategoria.map((g) => (
                   <div
-                    key={row.categoria}
+                    key={g.id}
                     className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-background/40 px-4 py-3"
                   >
-                    <div className="min-w-[10rem] flex-1">
-                      <div className="text-sm font-medium">{row.categoria}</div>
+                    <div className="min-w-[14rem] flex-1">
+                      <div className="text-sm font-medium">{g.concepto}</div>
                       <div className="font-mono text-[10px] text-muted-foreground">
-                        {row.count} ítems · {fmtMoney(row.total)}
+                        {g.local} · {g.fechaPago || "sin fecha"} · categoría original: {g.imputacion} ·{" "}
+                        {fmtMoney(g.monto)}
                       </div>
                     </div>
                     <select
                       defaultValue=""
-                      onChange={(e) => categorizar(row.categoria, e.target.value)}
+                      onChange={(e) => categorizar(g, e.target.value)}
                       className="bg-background/70 border border-white/10 rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-cyan"
                     >
                       <option value="" disabled>
@@ -404,5 +386,6 @@ function Documentos() {
       </div>
       <Toaster />
     </div>
+    </RequireAdmin>
   );
 }
