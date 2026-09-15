@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Menu, X, Save, RotateCcw } from "lucide-react";
+import { Menu, X, Save, RotateCcw, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -30,13 +30,36 @@ const monthLabel = (ym: string) => {
   return `${MES_LABELS[m - 1]} ${y}`;
 };
 
+const COLLAPSED_KEY = "matrix:v1:pctCollapsedLocals";
+
+function loadCollapsed(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 function Percentages() {
   const [cfg, setCfg] = useState<PctConfig>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     setCfg(loadPctConfig());
+    setCollapsed(loadCollapsed());
   }, []);
+
+  const toggleCollapsed = (local: string) => {
+    setCollapsed((s) => {
+      const next = new Set(s);
+      if (next.has(local)) next.delete(local); else next.add(local);
+      try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
 
   const setValue = (local: string, ym: string, field: "f" | "nf", value: number) => {
     setCfg((s) => {
@@ -151,10 +174,20 @@ function Percentages() {
             </button>
           </div>
 
-          {PCT_LOCALS.map((local) => (
+          {PCT_LOCALS.map((local) => {
+            const isCollapsed = collapsed.has(local);
+            return (
             <section key={local} className="rounded-xl border border-white/10 bg-background/50 backdrop-blur-sm overflow-hidden">
-              <header className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
+              <header
+                onClick={() => toggleCollapsed(local)}
+                className="px-5 py-3 border-b border-white/10 flex items-center justify-between cursor-pointer select-none hover:bg-white/[0.03]"
+              >
                 <div className="flex items-center gap-2">
+                  {isCollapsed ? (
+                    <ChevronRight className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  )}
                   <span className="size-2 rounded-full bg-cyan animate-pulse" />
                   <h2 className="font-mono uppercase tracking-wider text-sm">{local}</h2>
                 </div>
@@ -162,6 +195,7 @@ function Percentages() {
                   <Save className="size-3" /> autosave
                 </div>
               </header>
+              {!isCollapsed && (
               <div className="overflow-x-auto scrollbar-cyan">
                 <table className="w-full text-sm">
                   <thead>
@@ -227,8 +261,10 @@ function Percentages() {
                   </tbody>
                 </table>
               </div>
+              )}
             </section>
-          ))}
+            );
+          })}
         </main>
       </div>
       <Toaster />

@@ -6,6 +6,7 @@
 // el contenido de este archivo manteniendo la firma `parseMatrix(file)`.
 
 import * as XLSX from "xlsx";
+import { loadCategoryOverrides, normalizeCategoriaKey, type CategoryOverrides } from "./categoryOverrides";
 
 export type Periodo = { mes: string; anio: number | string };
 export type LocalKey = string;
@@ -766,10 +767,21 @@ const CAT_SIN_SUB_LABEL: Record<string, string> = {
   "honorarios": "HONORARIOS S/CAT",
 };
 
-// Mapea (Categoria, Sub-categoria) → concepto EXACTO del esqueleto matrix
-function mapCatSubToConcept(cat: string, sub: string | null | undefined): { concepto: string; parent?: string } {
+// Mapea (Categoria, Sub-categoria) → concepto EXACTO del esqueleto matrix.
+// Si el usuario categorizó manualmente esta "Categoria" (sin sub) desde la UI,
+// esa regla tiene prioridad sobre el mapeo automático.
+function mapCatSubToConcept(
+  cat: string,
+  sub: string | null | undefined,
+  overrides?: CategoryOverrides,
+): { concepto: string; parent?: string } {
   const c = normalize(cat);
   const s = sub ? normalize(sub).replace(/\s+/g, " ").trim() : "";
+
+  if (!s) {
+    const override = overrides?.[normalizeCategoriaKey(cat)];
+    if (override) return { concepto: override };
+  }
 
   // Excepción: Mantenimiento → siempre MANTENIMIENTO LOCALES
   if (/mantenimient/.test(c)) return { concepto: "MANTENIMIENTO LOCALES" };
@@ -894,6 +906,8 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
   const cProv = col(/proveedor/);
   if (cLocal < 0 || cCat < 0 || cSub < 0 || (cMontoN < 0 && cMontoB < 0)) return null;
 
+  const overrides = loadCategoryOverrides();
+  const sinCatSeen = new Set<string>();
   const gastos: GastoRow[] = [];
   const localesSet = new Set<string>();
   for (let r = headerIdx + 1; r < rows.length; r++) {
@@ -905,7 +919,8 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
     if (!local || !cat || !monto) continue;
     const fsrv = toDate(row[cFechaSrv]);
     const fpago = cFechaPago >= 0 ? toDate(row[cFechaPago]) : null;
-    const dest = mapCatSubToConcept(cat, sub || null);
+    const dest = mapCatSubToConcept(cat, sub || null, overrides);
+    if (dest.parent === "SIN CATEGORIA") sinCatSeen.add(dest.concepto);
     localesSet.add(local);
     gastos.push({
       local,
@@ -930,18 +945,13 @@ function parseGastosDetalladosWorkbook(wb: XLSX.WorkBook, file: File): MatrixDat
   const locales = [...orden, ...extra];
   const excluidosDeTotal = locales.filter((l) => /costa\s*gral/i.test(l));
 
-  // Skeleton: base + SIN CATEGORIA al final (grupos categoría origen)
-  const sinCatChildren = [
-    "MKT Y PUBLICIDAD S/CAT",
-    "OPERACION S/CAT",
-    "COMISIONES POR VENTA S/CAT",
-    "CMV S/CAT",
-    "HONORARIOS S/CAT",
-  ];
+  // Skeleton: base + SIN CATEGORIA al final, con los buckets efectivamente
+  // detectados en este archivo (incluye categorías nuevas no reconocidas,
+  // que antes se perdían del P&L por no estar en una lista fija).
   const skeleton: SkelItem[] = [
     ...MATRIX_SKELETON,
     { concepto: "SIN CATEGORIA", parent: null, esGrupo: true, esSubtotal: true },
-    ...sinCatChildren.map((c) => ({ concepto: c, parent: "SIN CATEGORIA" } as SkelItem)),
+    ...[...sinCatSeen].sort().map((c) => ({ concepto: c, parent: "SIN CATEGORIA" } as SkelItem)),
   ];
 
   const excluded = new Set(excluidosDeTotal);
@@ -1026,6 +1036,63 @@ export async function parseGastosDetallados(file: File): Promise<MatrixData> {
   const parsed = parseGastosDetalladosWorkbook(wb, file);
   if (!parsed) throw new Error("No se detectaron columnas esperadas (Local, Fecha Servicio, Categoria, Sub-categoria, Monto).");
   return parsed;
+}
+
+// Vuelve a agrupar los gastos "SIN CATEGORIA" de datos YA cargados, aplicando
+// las reglas de categorización manual (por "Categoria" original). Se usa cuando
+// el usuario asigna una categoría desde la UI, para no tener que re-subir el archivo.
+export function reclassifyGastos(data: MatrixData, overrides?: CategoryOverrides): MatrixData {
+  if (!data.gastos?.length) return data;
+  const rules = overrides ?? loadCategoryOverrides();
+  const skeleton = data.skeleton ?? MATRIX_SKELETON;
+  const sinCatBuckets = new Set(skeleton.filter((it) => it.parent === "SIN CATEGORIA").map((it) => it.concepto));
+
+  const gastos = data.gastos.map((g) => {
+    if (!sinCatBuckets.has(g.grupo)) return g;
+    const target = rules[normalizeCategoriaKey(g.imputacion)];
+    return target ? { ...g, grupo: target } : g;
+  });
+
+  const locales = data.locales;
+  const excluded = new Set(data.excluidosDeTotal ?? []);
+  const emptyPorLocal = (): Record<string, number> => Object.fromEntries(locales.map((l) => [l, 0]));
+
+  const perConcepto = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const g of gastos) {
+    if (!perConcepto.has(g.grupo)) perConcepto.set(g.grupo, { porLocal: emptyPorLocal(), total: 0 });
+    const acc = perConcepto.get(g.grupo)!;
+    acc.porLocal[g.local] = (acc.porLocal[g.local] ?? 0) + g.monto;
+    if (!excluded.has(g.local)) acc.total += g.monto;
+  }
+  const parentAgg = new Map<string, { porLocal: Record<string, number>; total: number }>();
+  for (const it of skeleton) {
+    if (!it.parent) continue;
+    const acc = perConcepto.get(it.concepto);
+    if (!acc) continue;
+    if (!parentAgg.has(it.parent)) parentAgg.set(it.parent, { porLocal: emptyPorLocal(), total: 0 });
+    const p = parentAgg.get(it.parent)!;
+    for (const [loc, v] of Object.entries(acc.porLocal)) p.porLocal[loc] = (p.porLocal[loc] ?? 0) + v;
+    p.total += acc.total;
+  }
+  const pyl: PyLRow[] = skeleton.map((it) => {
+    const d = it.parent ? perConcepto.get(it.concepto) : parentAgg.get(it.concepto);
+    return {
+      concepto: it.concepto,
+      grupo: it.parent ?? undefined,
+      porLocal: d?.porLocal ?? emptyPorLocal(),
+      total: d?.total ?? 0,
+      esGrupo: it.esGrupo,
+      esSubtotal: it.esSubtotal,
+    };
+  });
+
+  return { ...data, gastos, pyl, skeleton };
+}
+
+// Concepto destino → categoría origen (grupo padre) legible, para armar el
+// selector de categorías del panel de "SIN CATEGORIA".
+export function listaConceptosCategorizables(): Array<{ parent: string; concepto: string }> {
+  return MATRIX_SKELETON.filter((it) => it.parent).map((it) => ({ parent: it.parent!, concepto: it.concepto }));
 }
 
 // Demo data para mostrar el dashboard sin archivo cargado

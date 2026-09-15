@@ -1,22 +1,26 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Menu, X, Upload, FileSpreadsheet, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { Menu, X, Upload, FileSpreadsheet, Trash2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import {
   parseMatrix,
   parseGastosDetallados,
   mergeMatrixData,
+  reclassifyGastos,
+  listaConceptosCategorizables,
+  MATRIX_SKELETON,
   type MatrixData,
 } from "@/lib/matrixParser";
+import { setCategoryOverride } from "@/lib/categoryOverrides";
 
 export const Route = createFileRoute("/documentos")({
   head: () => ({
     meta: [
       { title: "MATRIX // Documentos" },
-      { name: "description", content: "Carga de documentos A y B y análisis de gastos identificados." },
+      { name: "description", content: "Carga de planillas y análisis de gastos identificados." },
       { property: "og:title", content: "MATRIX // Documentos" },
-      { property: "og:description", content: "Carga documentos por categoría y analizá los gastos detectados." },
+      { property: "og:description", content: "Cargá tus planillas y analizá los gastos detectados." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -42,13 +46,32 @@ function navLink(active: boolean) {
     : "text-left px-3 py-2.5 rounded-md text-sm font-medium border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground";
 }
 
+// Detecta automáticamente qué tipo de planilla es (resumen MATRIX o gastos
+// detallados con Categoría/Sub-categoría) para que el usuario no tenga que
+// elegir un "slot" a mano: sube el archivo y el sistema lo clasifica solo.
+async function detectAndParse(f: File): Promise<{ slot: "A" | "B"; parsed: MatrixData }> {
+  try {
+    const parsed = await parseGastosDetallados(f);
+    return { slot: "B", parsed };
+  } catch {
+    const parsed = await parseMatrix(f);
+    return { slot: "A", parsed };
+  }
+}
+
+const SLOT_LABEL: Record<"A" | "B", string> = {
+  A: "Resumen MATRIX",
+  B: "Gastos detallados (Categoría/Sub-categoría)",
+};
+
 function Documentos() {
   const [meta, setMeta] = useState<MetaMap>({});
   const [dataA, setDataA] = useState<MatrixData | null>(null);
   const [dataB, setDataB] = useState<MatrixData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const refA = useRef<HTMLInputElement>(null);
-  const refB = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -68,10 +91,11 @@ function Documentos() {
     try { localStorage.setItem(KEYS.meta, JSON.stringify(next)); } catch {}
   };
 
-  const handle = async (f: File | null | undefined, slot: "A" | "B") => {
+  const handle = async (f: File | null | undefined) => {
     if (!f) return;
+    setLoading(true);
     try {
-      const parsed = slot === "B" ? await parseGastosDetallados(f) : await parseMatrix(f);
+      const { slot, parsed } = await detectAndParse(f);
       localStorage.setItem(KEYS[slot], JSON.stringify(parsed));
       localStorage.setItem(KEYS.name, f.name);
       if (slot === "A") setDataA(parsed); else setDataB(parsed);
@@ -84,11 +108,19 @@ function Documentos() {
           locales: parsed.locales.length,
         },
       });
-      toast.success(`Documento ${slot} cargado · ${parsed.locales.length} locales`);
+      toast.success(`${SLOT_LABEL[slot]} cargado · ${parsed.locales.length} locales`);
     } catch (e) {
       console.error(e);
-      toast.error("No se pudo parsear el archivo");
+      toast.error("No pudimos identificar este archivo. Revisá que tenga las columnas esperadas (Local, Concepto/Categoría, Monto).");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    void handle(e.dataTransfer.files?.[0]);
   };
 
   const remove = (slot: "A" | "B") => {
@@ -114,6 +146,24 @@ function Documentos() {
     }
     const total = gastos.reduce((s, g) => s + g.monto, 0);
     const dates = gastos.map((g) => g.fechaPago).filter(Boolean).sort();
+
+    // Buckets "SIN CATEGORIA": agrupados por la Categoria original del archivo
+    // (imputacion), para poder asignarles un concepto real desde la UI.
+    const skeleton = combined.skeleton ?? MATRIX_SKELETON;
+    const sinCatBuckets = new Set(skeleton.filter((it) => it.parent === "SIN CATEGORIA").map((it) => it.concepto));
+    const byCategoriaOriginal = new Map<string, { grupo: string; total: number; count: number }>();
+    for (const g of gastos) {
+      if (!sinCatBuckets.has(g.grupo)) continue;
+      const key = g.imputacion || "SIN DATO";
+      const acc = byCategoriaOriginal.get(key) ?? { grupo: g.grupo, total: 0, count: 0 };
+      acc.total += g.monto;
+      acc.count += 1;
+      byCategoriaOriginal.set(key, acc);
+    }
+    const sinCategoria = [...byCategoriaOriginal.entries()]
+      .map(([categoria, v]) => ({ categoria, ...v }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       total,
       count: gastos.length,
@@ -122,62 +172,55 @@ function Documentos() {
       hasta: dates[dates.length - 1] ?? "",
       grupos: [...byGrupo.entries()].sort((a, b) => b[1] - a[1]),
       imputaciones: [...byImput.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20),
+      sinCategoria,
     };
   }, [dataA, dataB]);
 
-  const Card = ({ slot, title, desc }: { slot: "A" | "B"; title: string; desc: string }) => {
+  const categoriasDisponibles = useMemo(() => {
+    const items = listaConceptosCategorizables();
+    const byParent = new Map<string, string[]>();
+    for (const it of items) {
+      if (!byParent.has(it.parent)) byParent.set(it.parent, []);
+      byParent.get(it.parent)!.push(it.concepto);
+    }
+    return [...byParent.entries()];
+  }, []);
+
+  const categorizar = (categoriaOriginal: string, concepto: string) => {
+    if (!concepto || !dataB) return;
+    setCategoryOverride(categoriaOriginal, concepto);
+    const next = reclassifyGastos(dataB);
+    localStorage.setItem(KEYS.B, JSON.stringify(next));
+    setDataB(next);
+    toast.success(`"${categoriaOriginal}" → ${concepto}`);
+  };
+
+  const StatusRow = ({ slot, title }: { slot: "A" | "B"; title: string }) => {
     const m = meta[slot];
-    const inputRef = slot === "A" ? refA : refB;
     return (
-      <section className="rounded-xl border border-white/10 bg-panel/40 p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="size-4 text-cyan" />
-              <h2 className="font-mono uppercase tracking-wider text-sm">{title}</h2>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{desc}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(e) => { void handle(e.target.files?.[0], slot); e.currentTarget.value = ""; }}
-            />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-white/10 bg-background/40 px-4 py-3 font-mono text-xs">
+        <div className="flex items-center gap-2 min-w-[11rem]">
+          <FileSpreadsheet className={`size-3.5 ${m ? "text-cyan" : "text-muted-foreground"}`} />
+          <span className={m ? "text-foreground" : "text-muted-foreground"}>{title}</span>
+        </div>
+        {m ? (
+          <>
+            <span className="text-foreground">{m.name}</span>
+            <span className="text-muted-foreground">{m.rows} filas</span>
+            <span className="text-muted-foreground">{m.locales} locales</span>
+            <span className="text-muted-foreground">{new Date(m.at).toLocaleString("es-AR")}</span>
             <button
-              onClick={() => inputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-md border border-cyan/40 bg-cyan/5 px-3 py-2 font-mono text-xs text-cyan hover:bg-cyan/15"
+              onClick={() => remove(slot)}
+              className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              title="Eliminar"
             >
-              <Upload className="size-3.5" /> Cargar
+              <Trash2 className="size-3.5" />
             </button>
-            {m && (
-              <button
-                onClick={() => remove(slot)}
-                className="inline-flex items-center gap-2 rounded-md border border-white/10 px-2 py-2 text-muted-foreground hover:text-foreground"
-                title="Eliminar"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="mt-4 rounded-lg border border-white/10 bg-background/40 px-4 py-3 font-mono text-xs">
-          {m ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-foreground">{m.name}</span>
-              <span className="text-muted-foreground">{m.rows} filas</span>
-              <span className="text-muted-foreground">{m.locales} locales</span>
-              <span className="text-muted-foreground">
-                {new Date(m.at).toLocaleString("es-AR")}
-              </span>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">Sin documento cargado</span>
-          )}
-        </div>
-      </section>
+          </>
+        ) : (
+          <span className="text-muted-foreground">Sin cargar todavía</span>
+        )}
+      </div>
     );
   };
 
@@ -220,13 +263,39 @@ function Documentos() {
               <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-cyan">Carga</div>
               <h1 className="text-2xl font-bold tracking-tight">Documentos</h1>
               <p className="text-xs text-muted-foreground mt-1">
-                Cargá los archivos por categoría. Se analizan en conjunto y alimentan la Matrix.
+                Arrastrá tu planilla o hacé clic para elegirla. El sistema detecta sola si es el resumen
+                MATRIX o la base de gastos detallados, y alimenta la Matrix automáticamente.
               </p>
             </div>
           </div>
 
-          <Card slot="A" title="Documento A" desc="MATRIX / gastos semanales (.xlsx)" />
-          <Card slot="B" title="Documento B" desc="Base de gastos detallados con Fecha Servicio + Categoría (.xlsx)" />
+          <section
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+            className={`rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
+              dragOver ? "border-cyan bg-cyan/5" : "border-white/15 bg-panel/40 hover:border-white/30"
+            }`}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => { void handle(e.target.files?.[0]); e.currentTarget.value = ""; }}
+            />
+            <Upload className={`mx-auto size-6 ${dragOver ? "text-cyan" : "text-muted-foreground"}`} />
+            <p className="mt-3 text-sm font-medium">
+              {loading ? "Procesando archivo…" : "Arrastrá tu planilla acá o hacé clic para elegirla"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">.xlsx, .xls o .csv</p>
+          </section>
+
+          <div className="space-y-2">
+            <StatusRow slot="A" title={SLOT_LABEL.A} />
+            <StatusRow slot="B" title={SLOT_LABEL.B} />
+          </div>
 
           <section className="rounded-xl border border-white/10 bg-panel/40 overflow-hidden">
             <header className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
@@ -279,6 +348,58 @@ function Documentos() {
               </div>
             )}
           </section>
+
+          {analysis && analysis.sinCategoria.length > 0 && (
+            <section className="rounded-xl border border-magenta/30 bg-panel/40 overflow-hidden">
+              <header className="px-5 py-3 border-b border-white/10 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Tag className="size-4 text-magenta" />
+                  <h2 className="font-mono uppercase tracking-wider text-sm">Sin categorizar</h2>
+                </div>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {analysis.sinCategoria.length} categoría(s) del archivo sin mapear
+                </span>
+              </header>
+              <p className="px-5 pt-4 text-xs text-muted-foreground">
+                Estas categorías vinieron sin sub-categoría en el documento de gastos detallados.
+                Elegí a qué concepto de la Matrix pertenecen; se va a aplicar a todos los ítems con esa
+                categoría (en este archivo y en los que subas después).
+              </p>
+              <div className="p-5 pt-3 space-y-2">
+                {analysis.sinCategoria.map((row) => (
+                  <div
+                    key={row.categoria}
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-background/40 px-4 py-3"
+                  >
+                    <div className="min-w-[10rem] flex-1">
+                      <div className="text-sm font-medium">{row.categoria}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {row.count} ítems · {fmtMoney(row.total)}
+                      </div>
+                    </div>
+                    <select
+                      defaultValue=""
+                      onChange={(e) => categorizar(row.categoria, e.target.value)}
+                      className="bg-background/70 border border-white/10 rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-cyan"
+                    >
+                      <option value="" disabled>
+                        Elegir categoría…
+                      </option>
+                      {categoriasDisponibles.map(([parent, conceptos]) => (
+                        <optgroup key={parent} label={parent}>
+                          {conceptos.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </main>
       </div>
       <Toaster />
