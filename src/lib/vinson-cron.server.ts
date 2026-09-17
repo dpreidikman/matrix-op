@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const BASE = "https://apireportes.vinson.com.ar";
-const STORES = [643, 695, 73, 363];
+// Costa 7070 y Kona migraron a tiendas "VinsonPOS" (958 y 959) — se
+// sincronizan ambos IDs (viejo y nuevo) porque en cualquier fecha dada solo
+// uno de los dos va a tener ventas, y así no se pierden datos post-migración.
+const STORES = [643, 695, 73, 363, 958, 959];
 
 let cachedToken: { token: string; exp: number } | null = null;
 

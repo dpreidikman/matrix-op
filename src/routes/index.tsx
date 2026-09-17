@@ -55,13 +55,17 @@ function ensureSkeletonRows(data: MatrixData): MatrixData {
   return { ...data, pyl, skeleton };
 }
 
-// Mapeo de locales de la matriz a tiendas Vinson.
-// El patrón se aplica sobre el nombre del local; el primero que matchee gana.
+// Mapeo de locales de la matriz a tiendas Vinson. Un local puede recibir de
+// más de una tienda (ej. Costa 7070 y Kona migraron a IDs "VinsonPOS" nuevos);
+// los totales de todas las tiendas que matchean el mismo local se SUMAN,
+// porque en una fecha dada solo una de las dos va a tener ventas.
 const VINSON_MAP: Array<{ pattern: RegExp; storeId: number; label: string }> = [
   { pattern: /la\s*mala/i, storeId: 643, label: "Vinson · 643" },
   { pattern: /comedor/i, storeId: 73, label: "Vinson · 73" },
   { pattern: /costa\s*resto/i, storeId: 695, label: "Vinson · 695" },
+  { pattern: /costa\s*resto/i, storeId: 958, label: "Vinson · 958" },
   { pattern: /^kona$|kona/i, storeId: 363, label: "Vinson · 363" },
+  { pattern: /^kona$|kona/i, storeId: 959, label: "Vinson · 959" },
 ];
 
 function loadPersisted(): { data: MatrixData; name: string } | null {
@@ -318,7 +322,14 @@ function Index() {
       const local = data.locales.find((l) => v.pattern.test(l));
       if (!local) return;
       const q = vinsonQueries[i];
-      map.set(local, { total: q?.data?.total ?? 0, isFetching: !!q?.isFetching, label: v.label });
+      const thisTotal = q?.data?.total ?? 0;
+      const prev = map.get(local);
+      map.set(local, {
+        total: (prev?.total ?? 0) + thisTotal,
+        isFetching: !!prev?.isFetching || !!q?.isFetching,
+        // Si esta tienda es la que realmente aportó datos, su label manda.
+        label: thisTotal > 0 || !prev ? v.label : prev.label,
+      });
     });
 
     for (const [local, monto] of Object.entries(gedisQuery.data ?? {})) {

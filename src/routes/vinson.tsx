@@ -15,8 +15,10 @@ import { getGedisResumenXTurno } from "@/lib/gedis.functions";
 const STORES = [
   { id: 643, name: "La Mala" },
   { id: 695, name: "Costa 7070" },
+  { id: 958, name: "Costa 7070 VinsonPOS" },
   { id: 73, name: "Narda Comedor" },
   { id: 363, name: "Kona" },
+  { id: 959, name: "Kona VinsonPOS" },
 ] as const;
 
 export const Route = createFileRoute("/vinson")({
