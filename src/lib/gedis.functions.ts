@@ -44,7 +44,12 @@ async function queryResumenXTurno(limit: number): Promise<{ columns: string[]; r
     );
   }
 
-  const sql = await import("mssql");
+  const mod = await import("mssql");
+  // mssql es CommonJS: según el interop, la API real puede estar en `default`.
+  const sql = ((mod as unknown as { default?: unknown }).default ?? mod) as typeof import("mssql");
+  if (typeof (sql as { ConnectionPool?: unknown }).ConnectionPool !== "function") {
+    throw new Error("No se pudo cargar el driver de SQL Server (mssql) en este entorno.");
+  }
   const config: import("mssql").config = {
     server: process.env.GEDIS_DB_HOST || "gedis.ar",
     port: Number(process.env.GEDIS_DB_PORT || 1435),
