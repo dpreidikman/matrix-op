@@ -287,7 +287,9 @@ export const syncVinsonRange = createServerFn({ method: "POST" })
         }
         try {
           const shifts = await fetchOneDay(data.storeId, dateIso);
-          if (shifts === null) {
+          // Respuesta vacía = la API todavía no publicó ese día. No guardamos 0
+          // para poder reintentarlo más adelante.
+          if (shifts === null || shifts.length === 0) {
             failed++;
             continue;
           }
