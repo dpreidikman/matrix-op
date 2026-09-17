@@ -9,6 +9,7 @@ import { AppNav } from "@/components/AppNav";
 import { useQueries } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getVinsonCachedRange, getVinsonLastDate } from "@/lib/vinson.functions";
+import { getGedisVentasPorLocal } from "@/lib/gedis.functions";
 import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_PCT, getPct, loadPctConfig, type PctConfig } from "@/lib/pctConfig";
 
@@ -293,21 +294,51 @@ function Index() {
       staleTime: 60_000,
     })),
   });
-  const vinsonByLocal = useMemo(() => {
-    const map = new Map<string, { total: number; isFetching: boolean; label: string; storeId: number }>();
+  // GEDIS: ventas por empresa (COSTA RESTO se suma sobre lo que ya trae Vinson).
+  const fetchGedisVentas = useServerFn(getGedisVentasPorLocal);
+  const gedisQuery = useQuery({
+    queryKey: ["gedis", "ventas-por-local", periodFrom, periodTo],
+    queryFn: () => fetchGedisVentas({ data: { from: periodFrom, to: periodTo } }),
+    enabled: Boolean(periodFrom && periodTo),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  // Ventas "reales" por local: Vinson + GEDIS (se suman cuando ambos aportan al
+  // mismo local, ej. COSTA RESTO), y COSTA GRAL ("Costa 7070") se deriva como
+  // COSTA RESTO + COSTA CLUB una vez que alguno de los dos tiene datos externos.
+  const salesByLocal = useMemo(() => {
+    const map = new Map<string, { total: number; isFetching: boolean; label: string }>();
     VINSON_MAP.forEach((v, i) => {
       const local = data.locales.find((l) => v.pattern.test(l));
       if (!local) return;
       const q = vinsonQueries[i];
-      map.set(local, {
-        total: q?.data?.total ?? 0,
-        isFetching: !!q?.isFetching,
-        label: v.label,
-        storeId: v.storeId,
-      });
+      map.set(local, { total: q?.data?.total ?? 0, isFetching: !!q?.isFetching, label: v.label });
     });
+
+    for (const [local, monto] of Object.entries(gedisQuery.data ?? {})) {
+      const prev = map.get(local);
+      map.set(local, {
+        total: (prev?.total ?? 0) + (monto || 0),
+        isFetching: !!prev?.isFetching || gedisQuery.isFetching,
+        label: prev ? `${prev.label} + GEDIS` : "GEDIS",
+      });
+    }
+
+    const costaResto = map.get("COSTA RESTO");
+    const costaClub = map.get("COSTA CLUB");
+    if (costaResto || costaClub) {
+      const costaGralLocal = data.locales.find((l) => /costa\s*gral/i.test(l));
+      if (costaGralLocal) {
+        map.set(costaGralLocal, {
+          total: (costaResto?.total ?? 0) + (costaClub?.total ?? 0),
+          isFetching: !!costaResto?.isFetching || !!costaClub?.isFetching,
+          label: "Costa Resto + Costa Club",
+        });
+      }
+    }
     return map;
-  }, [data.locales, vinsonQueries]);
+  }, [data.locales, vinsonQueries, gedisQuery.data, gedisQuery.isFetching]);
 
   // Mes efectivo para elegir los % (usa el mes de periodFrom; fallback default).
   const pctYm = periodFrom ? periodFrom.slice(0, 7) : "";
@@ -332,12 +363,12 @@ function Index() {
       let nf = vnf?.porLocal[loc] ?? 0;
       const o = otrosOverrides[loc] ?? oi?.porLocal[loc] ?? 0;
       let real = tvb?.porLocal[loc] ?? f + nf + o;
-      const info = vinsonByLocal.get(loc);
-      const fromVinson = !!info && (info.total > 0 || info.isFetching);
-      let vinsonLabel: string | undefined;
+      const info = salesByLocal.get(loc);
+      const fromExternal = !!info && (info.total > 0 || info.isFetching);
+      let externalLabel: string | undefined;
       if (info && (info.total > 0 || info.isFetching)) {
         real = info.total;
-        vinsonLabel = info.label;
+        externalLabel = info.label;
         // VENTA F = (TVB * f%) / 1.21 ; VENTA NF = TVB * nf% ; OTROS INGRESOS = manual.
         const p = pctFor(loc);
         f = (real * (p.f / 100)) / 1.21;
@@ -348,10 +379,10 @@ function Index() {
       const proyectado = proyectadoRaw ?? 0;
       const hasProy = proyectadoRaw !== undefined && proyectadoRaw !== 0;
       const variacion = hasProy && real ? (real - proyectado) / real : 0;
-      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromVinson, vinsonLabel };
+      return { local: loc, f, nf, o, segSum, real, proyectado, hasProy, variacion, fromExternal, externalLabel };
     });
     return { rows };
-  }, [data, activeLocal, vinsonByLocal, otrosOverrides, excludedSet, pctCfg, pctYm]);
+  }, [data, activeLocal, salesByLocal, otrosOverrides, excludedSet, pctCfg, pctYm]);
 
   // Overrides para la matriz P&L: cuando Vinson trae ventas de LA MALA,
   // derivamos TOTAL VENTA BRUTA, VENTA F, VENTA NF y TOTAL INGRESOS para esa columna.
@@ -376,8 +407,8 @@ function Index() {
     }
     const getOtros = (loc: string) =>
       otrosOverrides[loc] ?? otrosRow?.porLocal[loc] ?? 0;
-    // Overrides derivados de Vinson por local mapeado
-    for (const [loc, info] of vinsonByLocal) {
+    // Overrides derivados de Vinson + GEDIS por local mapeado
+    for (const [loc, info] of salesByLocal) {
       if (!(info.total > 0)) continue;
       const tvb = info.total;
       const p = pctFor(loc);
@@ -393,7 +424,7 @@ function Index() {
       }
     }
     return map;
-  }, [data, vinsonByLocal, otrosOverrides, otrosRow, pctCfg, pctYm]);
+  }, [data, salesByLocal, otrosOverrides, otrosRow, pctCfg, pctYm]);
 
   const getCell = (concepto: string, local: string, original: number) =>
     cellOverrides.get(concepto)?.get(local) ?? original;
@@ -916,11 +947,11 @@ function Index() {
                         <div className="grid grid-cols-3 gap-5 shrink-0 w-[460px]">
                           <div className="text-right">
                             <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-muted-foreground whitespace-nowrap">Total Venta Bruta</div>
-                            <div className={`font-display text-base font-bold tabular-nums ${r.fromVinson ? "text-cyan" : "text-foreground"}`}>
-                              {r.fromVinson && r.real === 0 ? "…" : fmtMoney(r.real)}
+                            <div className={`font-display text-base font-bold tabular-nums ${r.fromExternal ? "text-cyan" : "text-foreground"}`}>
+                              {r.fromExternal && r.real === 0 ? "…" : fmtMoney(r.real)}
                             </div>
-                            {r.fromVinson && r.vinsonLabel && (
-                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">{r.vinsonLabel}</div>
+                            {r.fromExternal && r.externalLabel && (
+                              <div className="text-[8px] font-mono uppercase tracking-[0.2em] text-cyan/70">{r.externalLabel}</div>
                             )}
                           </div>
                           <div className="text-right">

@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Activity, Menu, X, Database } from "lucide-react";
+import { Activity, Menu, X, Database, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { AppNav } from "@/components/AppNav";
@@ -10,6 +10,7 @@ import {
   getVinsonHistory,
   syncVinsonRange,
 } from "@/lib/vinson.functions";
+import { getGedisResumenXTurno } from "@/lib/gedis.functions";
 
 const STORES = [
   { id: 643, name: "La Mala" },
@@ -38,8 +39,89 @@ function todayIso() {
   return `${y}-${m}-${day}`;
 }
 
+function fmtCell(v: string | number | boolean | null) {
+  if (v === null) return "—";
+  if (typeof v === "boolean") return v ? "Sí" : "No";
+  return String(v);
+}
+
+function GedisPanel() {
+  const fetchResumen = useServerFn(getGedisResumenXTurno);
+  const query = useQuery({
+    queryKey: ["gedis", "resumen-x-turno"],
+    queryFn: () => fetchResumen(),
+    retry: false,
+  });
+
+  return (
+    <section className="rounded-lg border border-white/10 bg-panel/40 backdrop-blur-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 gap-4">
+        <div className="font-display text-sm tracking-widest text-muted-foreground">
+          GEDIS · CentralCosta · RESUMENXTURNO
+        </div>
+        <div className="flex items-center gap-3">
+          {query.data && (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {query.data.rows.length} de {query.data.total} filas
+            </span>
+          )}
+          <button
+            onClick={() => query.refetch()}
+            disabled={query.isFetching}
+            className="inline-flex items-center gap-2 rounded-md border border-cyan/40 bg-cyan/5 px-3 py-1.5 font-mono text-xs text-cyan hover:bg-cyan/15 disabled:opacity-50"
+          >
+            <RefreshCw className={`size-3.5 ${query.isFetching ? "animate-spin" : ""}`} /> Refrescar
+          </button>
+        </div>
+      </div>
+
+      {query.isPending ? (
+        <p className="px-5 py-8 text-center text-sm text-muted-foreground">Consultando GEDIS…</p>
+      ) : query.isError ? (
+        <div className="px-5 py-6 text-sm">
+          <p className="text-red-500 font-medium">No se pudo conectar a GEDIS.</p>
+          <p className="mt-2 text-muted-foreground font-mono text-xs whitespace-pre-wrap">
+            {(query.error as Error)?.message ?? String(query.error)}
+          </p>
+          <p className="mt-3 text-muted-foreground">
+            Si el error menciona variables de entorno, hay que cargar GEDIS_DB_USER y GEDIS_DB_PASSWORD en
+            Lovable Cloud. Si es un error de conexión/timeout, puede ser que el entorno de despliegue no
+            soporte conexiones TCP directas a SQL Server.
+          </p>
+        </div>
+      ) : query.data && query.data.rows.length === 0 ? (
+        <p className="px-5 py-8 text-center text-sm text-muted-foreground">La tabla no tiene registros.</p>
+      ) : query.data ? (
+        <div className="max-h-[420px] overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-panel/95 backdrop-blur">
+              <tr className="text-left text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                {query.data.columns.map((c) => (
+                  <th key={c} className="px-5 py-3 whitespace-nowrap">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.rows.map((row, i) => (
+                <tr key={i} className="border-t border-white/5">
+                  {query.data!.columns.map((c) => (
+                    <td key={c} className="px-5 py-2 font-mono text-xs whitespace-nowrap">
+                      {fmtCell(row[c])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function VinsonPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tab, setTab] = useState<"vinson" | "gedis">("vinson");
   const [storeId, setStoreId] = useState<number>(STORES[0].id);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string>("");
@@ -202,27 +284,55 @@ function VinsonPage() {
             <AppNav active="/vinson" />
 
             <div className="mt-4 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">
-              Vinson · Tiendas
+              Ventas · Fuente
             </div>
-            {STORES.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => { setStoreId(s.id); setSidebarOpen(false); }}
-                className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
-                  storeId === s.id
-                    ? "bg-cyan/10 border-cyan/30 text-cyan"
-                    : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-cyan" />
-                  <span>{s.name}</span>
+            <button
+              onClick={() => setTab("vinson")}
+              className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
+                tab === "vinson"
+                  ? "bg-cyan/10 border-cyan/30 text-cyan"
+                  : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+              }`}
+            >
+              VINSON
+            </button>
+            <button
+              onClick={() => setTab("gedis")}
+              className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
+                tab === "gedis"
+                  ? "bg-cyan/10 border-cyan/30 text-cyan"
+                  : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+              }`}
+            >
+              GEDIS
+            </button>
+
+            {tab === "vinson" && (
+              <>
+                <div className="mt-4 mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground px-2">
+                  Vinson · Tiendas
                 </div>
-                <div className="mt-1 text-[10px] font-mono text-muted-foreground">
-                  ID {s.id}
-                </div>
-              </button>
-            ))}
+                {STORES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setStoreId(s.id); setSidebarOpen(false); }}
+                    className={`text-left px-3 py-2.5 rounded-md text-sm transition-all border ${
+                      storeId === s.id
+                        ? "bg-cyan/10 border-cyan/30 text-cyan"
+                        : "border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="size-1.5 rounded-full bg-cyan" />
+                      <span>{s.name}</span>
+                    </div>
+                    <div className="mt-1 text-[10px] font-mono text-muted-foreground">
+                      ID {s.id}
+                    </div>
+                  </button>
+                ))}
+              </>
+            )}
           </nav>
         </aside>
 
@@ -238,29 +348,37 @@ function VinsonPage() {
               </button>
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground">
                 <Activity className="size-3" />
-                Vinson · Reporting API
+                {tab === "vinson" ? "Vinson · Reporting API" : "GEDIS · CentralCosta"}
               </div>
               <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-foreground">
-                VENTAS POR TURNO
+                VENTAS {tab === "gedis" && "· GEDIS"}
               </h1>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {store?.name} · ID {storeId}
-              </div>
+              {tab === "vinson" && (
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {store?.name} · ID {storeId}
+                </div>
+              )}
             </div>
 
-            <div className="flex items-end gap-2">
-              <button
-                onClick={backfill2026}
-                disabled={syncing}
-                className="inline-flex items-center gap-2 rounded-md bg-magenta/20 border border-magenta/40 px-4 py-2 text-sm font-medium text-magenta hover:bg-magenta/30 disabled:opacity-50"
-                title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta hoy"
-              >
-                <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
-                {syncing ? "Sincronizando…" : "Backfill 2026"}
-              </button>
-            </div>
+            {tab === "vinson" && (
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={backfill2026}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-2 rounded-md bg-magenta/20 border border-magenta/40 px-4 py-2 text-sm font-medium text-magenta hover:bg-magenta/30 disabled:opacity-50"
+                  title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta hoy"
+                >
+                  <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
+                  {syncing ? "Sincronizando…" : "Backfill 2026"}
+                </button>
+              </div>
+            )}
           </header>
 
+          {tab === "gedis" ? (
+            <GedisPanel />
+          ) : (
+          <>
           <div className="mb-6 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan/80">
             <span className="opacity-60">Período</span>
             {availableMonths.length > 0 && (
@@ -384,6 +502,8 @@ function VinsonPage() {
               </div>
             )}
           </section>
+          </>
+          )}
         </main>
       </div>
     </div>
