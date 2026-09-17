@@ -179,7 +179,12 @@ function Index() {
       .map((g) => g.fechaPago)
       .filter((f): f is string => Boolean(f) && /^\d{4}-\d{2}/.test(f))
       .sort();
-    const lastYm = dates.length ? dates[dates.length - 1].slice(0, 7) : todayISO().slice(0, 7);
+    // El tope nunca es anterior al mes actual: aunque el archivo cargado
+    // tenga datos solo hasta un mes anterior, el selector debe llegar a hoy
+    // (y más allá, si hubiera datos con fecha futura).
+    const todayYm = todayISO().slice(0, 7);
+    const lastGastoYm = dates.length ? dates[dates.length - 1].slice(0, 7) : todayYm;
+    const lastYm = lastGastoYm > todayYm ? lastGastoYm : todayYm;
     const months: string[] = [];
     let y = 2026, m = 1;
     const [endY, endM] = lastYm.split("-").map(Number);
