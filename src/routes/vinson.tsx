@@ -180,37 +180,36 @@ function VinsonPage() {
     return d.toISOString().slice(0, 10);
   }
 
+  // Sincroniza UNA tienda desde 2026-01-01 hasta hoy (el servidor omite los
+  // días ya cacheados). Se reutiliza tanto para "Backfill" de la tienda
+  // actual como para "Sincronizar todas".
+  async function backfillStore(id: number, onProgress: (msg: string) => void) {
+    const today = todayIso();
+    let cursor = "2026-01-01";
+    let synced = 0, skipped = 0, failed = 0;
+    const CHUNK = 20;
+    while (cursor <= today) {
+      const chunkEnd = isoAdd(cursor, CHUNK - 1);
+      const to = chunkEnd > today ? today : chunkEnd;
+      onProgress(`${cursor} → ${to} (${synced} guardados)`);
+      const r = await runSync({ data: { storeId: id, from: cursor, to } });
+      synced += r.synced;
+      skipped += r.skipped;
+      failed += r.failed;
+      cursor = isoAdd(to, 1);
+    }
+    return { synced, skipped, failed };
+  }
+
   async function backfill2026() {
     if (syncing) return;
     setSyncing(true);
     setSyncMsg("Iniciando…");
     try {
-      const today = todayIso();
-      // Siempre barrer todo 2026 hasta hoy; el servidor omite los días ya cacheados.
-      let cursor = "2026-01-01";
-      if (cursor > today) {
-        setSyncMsg("Ya está al día.");
-        return;
-      }
-      let totalSynced = 0;
-      let totalSkipped = 0;
-      let totalFailed = 0;
-      const CHUNK = 20;
-      while (cursor <= today) {
-        const chunkEnd = isoAdd(cursor, CHUNK - 1);
-        const to = chunkEnd > today ? today : chunkEnd;
-        setSyncMsg(`Sincronizando ${cursor} → ${to} (${totalSynced} guardados)`);
-        const r = await runSync({ data: { storeId, from: cursor, to } });
-        totalSynced += r.synced;
-        totalSkipped += r.skipped;
-        totalFailed += r.failed;
-        cursor = isoAdd(to, 1);
-      }
-      setSyncMsg(
-        `Listo · ${totalSynced} nuevos · ${totalSkipped} en caché · ${totalFailed} sin datos`,
-      );
-      if (totalSynced > 0) toast.success(`Sincronizados ${totalSynced} días nuevos`);
-      queryClient.invalidateQueries({ queryKey: ["vinson", "history", storeId] });
+      const r = await backfillStore(storeId, (m) => setSyncMsg(`Sincronizando ${m}`));
+      setSyncMsg(`Listo · ${r.synced} nuevos · ${r.skipped} en caché · ${r.failed} sin datos`);
+      if (r.synced > 0) toast.success(`Sincronizados ${r.synced} días nuevos`);
+      queryClient.invalidateQueries({ queryKey: ["vinson"] });
     } catch (e) {
       toast.error((e as Error).message);
       setSyncMsg("Error durante la sincronización.");
@@ -219,28 +218,39 @@ function VinsonPage() {
     }
   }
 
-  // Auto-sync missing days up to today, once per store per session.
-  const autoRan = useRef<Set<number>>(new Set());
+  // Sincroniza TODAS las tiendas conocidas (incluidas las VinsonPOS nuevas),
+  // para no depender de que el usuario abra cada pestaña una por una.
+  async function backfillAllStores() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      let synced = 0, skipped = 0, failed = 0;
+      for (const s of STORES) {
+        const r = await backfillStore(s.id, (m) => setSyncMsg(`${s.name}: ${m}`));
+        synced += r.synced;
+        skipped += r.skipped;
+        failed += r.failed;
+      }
+      setSyncMsg(`Listo (todas las tiendas) · ${synced} nuevos · ${skipped} en caché · ${failed} sin datos`);
+      toast.success(`Sincronización completa: ${synced} días nuevos en total`);
+      queryClient.invalidateQueries({ queryKey: ["vinson"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+      setSyncMsg("Error durante la sincronización.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // Auto-sync TODAS las tiendas (no solo la pestaña abierta) una vez por
+  // sesión, para no depender de que alguien abra cada pestaña manualmente.
+  const autoRan = useRef(false);
   useEffect(() => {
-    if (historyQuery.isLoading || syncing) return;
-    if (autoRan.current.has(storeId)) return;
-    const rows = historyQuery.data?.rows ?? [];
-    const today = todayIso();
-    const dates = new Set(rows.map((r) => r.date));
-    // Calcular cuántos días entre 2026-01-01 y ayer no están cacheados
-    let missing = 0;
-    const start = new Date("2026-01-01T00:00:00Z");
-    const yesterday = new Date(`${today}T00:00:00Z`);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    for (let d = new Date(start); d <= yesterday; d.setUTCDate(d.getUTCDate() + 1)) {
-      if (!dates.has(d.toISOString().slice(0, 10))) missing++;
-    }
-    if (missing > 0) {
-      autoRan.current.add(storeId);
-      backfill2026();
-    }
+    if (autoRan.current || syncing) return;
+    autoRan.current = true;
+    backfillAllStores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, historyQuery.data, historyQuery.isLoading]);
+  }, []);
 
   const store = STORES.find((s) => s.id === storeId);
 
@@ -368,10 +378,19 @@ function VinsonPage() {
                   onClick={backfill2026}
                   disabled={syncing}
                   className="inline-flex items-center gap-2 rounded-md bg-magenta/20 border border-magenta/40 px-4 py-2 text-sm font-medium text-magenta hover:bg-magenta/30 disabled:opacity-50"
-                  title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta hoy"
+                  title="Descarga y guarda en base de datos todos los días desde 2026-01-01 hasta hoy, para esta tienda"
                 >
                   <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
-                  {syncing ? "Sincronizando…" : "Backfill 2026"}
+                  {syncing ? "Sincronizando…" : "Backfill esta tienda"}
+                </button>
+                <button
+                  onClick={backfillAllStores}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-2 rounded-md bg-cyan/10 border border-cyan/40 px-4 py-2 text-sm font-medium text-cyan hover:bg-cyan/20 disabled:opacity-50"
+                  title="Sincroniza las 6 tiendas (incluidas Costa 7070/Kona VinsonPOS), sin tener que abrir cada pestaña"
+                >
+                  <Database className={`size-4 ${syncing ? "animate-pulse" : ""}`} />
+                  {syncing ? "Sincronizando…" : "Sincronizar todas"}
                 </button>
               </div>
             )}
