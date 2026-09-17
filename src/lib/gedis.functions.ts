@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
 // Acceso a la base GEDIS (SQL Server) — tabla ResumenXTurno.
 //
@@ -35,7 +36,7 @@ function sanitizeRow(row: Record<string, unknown>): GedisRow {
   return out;
 }
 
-async function queryResumenXTurno(limit: number): Promise<{ columns: string[]; rows: GedisRow[]; total: number }> {
+async function connect() {
   const user = process.env.GEDIS_DB_USER;
   const password = process.env.GEDIS_DB_PASSWORD;
   if (!user || !password) {
@@ -62,8 +63,13 @@ async function queryResumenXTurno(limit: number): Promise<{ columns: string[]; r
   };
 
   const pool = new sql.ConnectionPool(config);
+  await pool.connect();
+  return { sql, pool };
+}
+
+async function queryResumenXTurno(limit: number): Promise<{ columns: string[]; rows: GedisRow[]; total: number }> {
+  const { pool } = await connect();
   try {
-    await pool.connect();
     const [countResult, dataResult] = await Promise.all([
       pool.request().query("SELECT COUNT(*) AS total FROM ResumenXTurno"),
       pool.request().query(`SELECT TOP (${limit}) * FROM ResumenXTurno`),
@@ -83,3 +89,53 @@ export const getGedisResumenXTurno = createServerFn({ method: "POST" }).handler(
     return queryResumenXTurno(300);
   },
 );
+
+// Empresa (columna EMPRESA de ResumenXTurno) → local exacto de la Matrix.
+// "costa_abajo" se suma sobre lo que ya aporta Vinson para COSTA RESTO.
+export const GEDIS_EMPRESA_TO_LOCAL: Record<string, string> = {
+  cruza_recoleta: "CRUZA RECOLETA",
+  costa_abajo: "COSTA RESTO",
+  COSTA7070: "COSTA CLUB",
+  CRUZA_POLO: "CRUZA POLO",
+};
+
+// Ventas (columna TOTAL) por empresa GEDIS, agrupadas y ya mapeadas al local
+// de la Matrix, para un rango de fechas (columna FechaApertura).
+async function ventasPorEmpresa(from: string, to: string): Promise<Record<string, number>> {
+  const { sql, pool } = await connect();
+  try {
+    const empresas = Object.keys(GEDIS_EMPRESA_TO_LOCAL);
+    const request = pool.request();
+    const toExclusive = new Date(`${to}T00:00:00Z`);
+    toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+    request.input("from", sql.Date, new Date(`${from}T00:00:00Z`));
+    request.input("to", sql.Date, toExclusive);
+    empresas.forEach((e, i) => request.input(`e${i}`, sql.VarChar, e));
+    const inClause = empresas.map((_, i) => `@e${i}`).join(", ");
+    const result = await request.query(
+      `SELECT EMPRESA, SUM(TOTAL) AS total FROM ResumenXTurno
+       WHERE FechaApertura >= @from AND FechaApertura < @to AND EMPRESA IN (${inClause})
+       GROUP BY EMPRESA`,
+    );
+    const porLocal: Record<string, number> = {};
+    for (const row of result.recordset as { EMPRESA: string; total: number | string | null }[]) {
+      const local = GEDIS_EMPRESA_TO_LOCAL[row.EMPRESA];
+      if (!local) continue;
+      porLocal[local] = (porLocal[local] ?? 0) + (Number(row.total) || 0);
+    }
+    return porLocal;
+  } finally {
+    await pool.close();
+  }
+}
+
+export const getGedisVentasPorLocal = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  )
+  .handler(async ({ data }): Promise<Record<string, number>> => {
+    return ventasPorEmpresa(data.from, data.to);
+  });

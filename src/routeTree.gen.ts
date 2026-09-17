@@ -13,7 +13,6 @@ import { Route as VinsonRouteImport } from './routes/vinson'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as ProyeccionesRouteImport } from './routes/proyecciones'
 import { Route as PercentagesRouteImport } from './routes/percentages'
-import { Route as GedisRouteImport } from './routes/gedis'
 import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as CargaManualRouteImport } from './routes/carga-manual'
 import { Route as AgenteRouteImport } from './routes/agente'
@@ -39,11 +38,6 @@ const ProyeccionesRoute = ProyeccionesRouteImport.update({
 const PercentagesRoute = PercentagesRouteImport.update({
   id: '/percentages',
   path: '/percentages',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GedisRoute = GedisRouteImport.update({
-  id: '/gedis',
-  path: '/gedis',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocumentosRoute = DocumentosRouteImport.update({
@@ -83,7 +77,6 @@ export interface FileRoutesByFullPath {
   '/agente': typeof AgenteRoute
   '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
-  '/gedis': typeof GedisRoute
   '/percentages': typeof PercentagesRoute
   '/proyecciones': typeof ProyeccionesRoute
   '/usuarios': typeof UsuariosRoute
@@ -96,7 +89,6 @@ export interface FileRoutesByTo {
   '/agente': typeof AgenteRoute
   '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
-  '/gedis': typeof GedisRoute
   '/percentages': typeof PercentagesRoute
   '/proyecciones': typeof ProyeccionesRoute
   '/usuarios': typeof UsuariosRoute
@@ -110,7 +102,6 @@ export interface FileRoutesById {
   '/agente': typeof AgenteRoute
   '/carga-manual': typeof CargaManualRoute
   '/documentos': typeof DocumentosRoute
-  '/gedis': typeof GedisRoute
   '/percentages': typeof PercentagesRoute
   '/proyecciones': typeof ProyeccionesRoute
   '/usuarios': typeof UsuariosRoute
@@ -125,7 +116,6 @@ export interface FileRouteTypes {
     | '/agente'
     | '/carga-manual'
     | '/documentos'
-    | '/gedis'
     | '/percentages'
     | '/proyecciones'
     | '/usuarios'
@@ -138,7 +128,6 @@ export interface FileRouteTypes {
     | '/agente'
     | '/carga-manual'
     | '/documentos'
-    | '/gedis'
     | '/percentages'
     | '/proyecciones'
     | '/usuarios'
@@ -151,7 +140,6 @@ export interface FileRouteTypes {
     | '/agente'
     | '/carga-manual'
     | '/documentos'
-    | '/gedis'
     | '/percentages'
     | '/proyecciones'
     | '/usuarios'
@@ -165,7 +153,6 @@ export interface RootRouteChildren {
   AgenteRoute: typeof AgenteRoute
   CargaManualRoute: typeof CargaManualRoute
   DocumentosRoute: typeof DocumentosRoute
-  GedisRoute: typeof GedisRoute
   PercentagesRoute: typeof PercentagesRoute
   ProyeccionesRoute: typeof ProyeccionesRoute
   UsuariosRoute: typeof UsuariosRoute
@@ -202,13 +189,6 @@ declare module '@tanstack/react-router' {
       path: '/percentages'
       fullPath: '/percentages'
       preLoaderRoute: typeof PercentagesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gedis': {
-      id: '/gedis'
-      path: '/gedis'
-      fullPath: '/gedis'
-      preLoaderRoute: typeof GedisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/documentos': {
@@ -261,7 +241,6 @@ const rootRouteChildren: RootRouteChildren = {
   AgenteRoute: AgenteRoute,
   CargaManualRoute: CargaManualRoute,
   DocumentosRoute: DocumentosRoute,
-  GedisRoute: GedisRoute,
   PercentagesRoute: PercentagesRoute,
   ProyeccionesRoute: ProyeccionesRoute,
   UsuariosRoute: UsuariosRoute,
