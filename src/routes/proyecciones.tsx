@@ -19,8 +19,9 @@ import {
   loadProyecciones,
   upsertProyeccion,
   removeProyeccion,
-  monthRange,
+  periodoRange,
   type Proyeccion,
+  type ProyeccionGranularidad,
 } from "@/lib/projections";
 
 export const Route = createFileRoute("/proyecciones")({
@@ -68,7 +69,10 @@ function Proyecciones() {
   const [local, setLocal] = useState<string>(PROYECCION_LOCALS[0]);
   const conceptos = useMemo(() => listaConceptosProyectables(), []);
   const [concepto, setConcepto] = useState<string>(conceptos[0]?.concepto ?? "");
-  const [mes, setMes] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [granularidad, setGranularidad] = useState<ProyeccionGranularidad>("mes");
+  const [mesValue, setMesValue] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [semanaValue, setSemanaValue] = useState<string>("");
+  const mes = granularidad === "semana" ? semanaValue : mesValue;
   const [monto, setMonto] = useState<string>("");
 
   useEffect(() => {
@@ -88,10 +92,10 @@ function Proyecciones() {
   const submit = () => {
     const montoNum = Number(monto);
     if (!local || !concepto || !mes || !montoNum) {
-      toast.error("Completá local, categoría, mes y un monto válido.");
+      toast.error("Completá local, categoría, período y un monto válido.");
       return;
     }
-    const next = upsertProyeccion({ local, concepto, mes, monto: montoNum });
+    const next = upsertProyeccion({ local, concepto, granularidad, mes, monto: montoNum });
     setProyecciones(next);
     setMonto("");
     toast.success("Proyección guardada");
@@ -106,7 +110,7 @@ function Proyecciones() {
     if (!combined) return [];
     return proyecciones
       .map((p) => {
-        const [from, to] = monthRange(p.mes);
+        const [from, to] = periodoRange(p.granularidad, p.mes);
         const filtered = combined.gastos?.length ? filterMatrixByPeriod(combined, from, to) : combined;
         const row = filtered.pyl.find((r) => r.concepto === p.concepto);
         const real = row?.porLocal[p.local] ?? 0;
@@ -170,7 +174,7 @@ function Proyecciones() {
               <Target className="size-4 text-cyan" />
               <h2 className="font-mono uppercase tracking-wider text-sm">Nueva proyección</h2>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
               <label className="flex flex-col gap-1 text-xs">
                 <span className="text-muted-foreground font-mono uppercase tracking-wider">Local</span>
                 <select
@@ -202,13 +206,34 @@ function Proyecciones() {
               </label>
 
               <label className="flex flex-col gap-1 text-xs">
-                <span className="text-muted-foreground font-mono uppercase tracking-wider">Mes</span>
-                <input
-                  type="month"
-                  value={mes}
-                  onChange={(e) => setMes(e.target.value)}
+                <span className="text-muted-foreground font-mono uppercase tracking-wider">Granularidad</span>
+                <select
+                  value={granularidad}
+                  onChange={(e) => setGranularidad(e.target.value as ProyeccionGranularidad)}
                   className="bg-background/70 border border-white/10 rounded px-2 py-2 text-sm focus:outline-none focus:border-cyan"
-                />
+                >
+                  <option value="mes">Mes</option>
+                  <option value="semana">Semana</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground font-mono uppercase tracking-wider">Período</span>
+                {granularidad === "mes" ? (
+                  <input
+                    type="month"
+                    value={mesValue}
+                    onChange={(e) => setMesValue(e.target.value)}
+                    className="bg-background/70 border border-white/10 rounded px-2 py-2 text-sm focus:outline-none focus:border-cyan"
+                  />
+                ) : (
+                  <input
+                    type="week"
+                    value={semanaValue}
+                    onChange={(e) => setSemanaValue(e.target.value)}
+                    className="bg-background/70 border border-white/10 rounded px-2 py-2 text-sm focus:outline-none focus:border-cyan"
+                  />
+                )}
               </label>
 
               <label className="flex flex-col gap-1 text-xs">
@@ -233,7 +258,7 @@ function Proyecciones() {
               </div>
             </div>
             <p className="mt-3 text-[10px] font-mono text-muted-foreground">
-              Si ya existe una proyección para ese local + categoría + mes, se actualiza el monto.
+              Si ya existe una proyección para ese local + categoría + período, se actualiza el monto.
             </p>
           </section>
 
@@ -248,7 +273,7 @@ function Proyecciones() {
               <div className="p-5 space-y-2">
                 {alertas.map((a) => (
                   <div key={a.id} className="text-sm">
-                    <span className="font-medium">{a.local} · {a.concepto} · {a.mes}</span>{" "}
+                    <span className="font-medium">{a.local} · {a.concepto} · {a.granularidad === "semana" ? "Semana " : ""}{a.mes}</span>{" "}
                     <span className="text-muted-foreground">
                       — proyectado {fmtMoney(a.monto)}, real {fmtMoney(a.real)} ({a.variacion >= 0 ? "+" : ""}
                       {fmtMoney(a.variacion)}, {fmtPct(a.variacionPct)})
@@ -287,7 +312,7 @@ function Proyecciones() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground border-b border-white/10">
-                      <th className="text-left px-4 py-3">Mes</th>
+                      <th className="text-left px-4 py-3">Período</th>
                       <th className="text-left px-4 py-3">Local</th>
                       <th className="text-left px-4 py-3">Categoría</th>
                       <th className="text-right px-4 py-3">Proyectado</th>
@@ -299,7 +324,10 @@ function Proyecciones() {
                   <tbody>
                     {comparacion.map((c) => (
                       <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                        <td className="px-4 py-2 font-mono text-xs">{c.mes}</td>
+                        <td className="px-4 py-2 font-mono text-xs">
+                          {c.granularidad === "semana" ? "Sem. " : ""}
+                          {c.mes}
+                        </td>
                         <td className="px-4 py-2 text-xs">{c.local}</td>
                         <td className="px-4 py-2 text-xs">{c.concepto}</td>
                         <td className="px-4 py-2 text-right font-mono text-xs">{fmtMoney(c.monto)}</td>

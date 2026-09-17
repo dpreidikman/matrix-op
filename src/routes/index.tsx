@@ -170,13 +170,24 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
-  // Meses disponibles según fechas de pago del archivo cargado (+ carga manual)
+  // Meses disponibles: todo el rango desde 01/2026 hasta la última fecha con
+  // datos cargados (archivo + carga manual), no solo los meses que tuvieron
+  // algún gasto puntual — así el selector no tiene "huecos".
   const availableMonths = useMemo(() => {
-    const set = new Set<string>();
-    for (const g of rawDataWithManual.gastos ?? []) {
-      if (g.fechaPago && /^\d{4}-\d{2}/.test(g.fechaPago)) set.add(g.fechaPago.slice(0, 7));
+    const dates = (rawDataWithManual.gastos ?? [])
+      .map((g) => g.fechaPago)
+      .filter((f): f is string => Boolean(f) && /^\d{4}-\d{2}/.test(f))
+      .sort();
+    const lastYm = dates.length ? dates[dates.length - 1].slice(0, 7) : todayISO().slice(0, 7);
+    const months: string[] = [];
+    let y = 2026, m = 1;
+    const [endY, endM] = lastYm.split("-").map(Number);
+    while (y < endY || (y === endY && m <= endM)) {
+      months.push(`${y}-${String(m).padStart(2, "0")}`);
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
     }
-    return [...set].sort();
+    return months;
   }, [rawDataWithManual.gastos]);
 
   const monthRange = (ym: string): [string, string] => {

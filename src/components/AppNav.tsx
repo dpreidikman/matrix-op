@@ -8,6 +8,7 @@ const LINKS = [
   { to: "/documentos", label: "Documentos", roles: ["administrador"] },
   { to: "/carga-manual", label: "Carga manual", roles: ["administrador"] },
   { to: "/vinson", label: "Ventas", roles: ["administrador", "usuario"] },
+  { to: "/gedis", label: "GEDIS", roles: ["administrador", "usuario"] },
   { to: "/proyecciones", label: "Proyecciones", roles: ["administrador"] },
   { to: "/percentages", label: "Configuraciones", roles: ["administrador"] },
   { to: "/agente", label: "Agente", roles: ["administrador", "usuario"] },

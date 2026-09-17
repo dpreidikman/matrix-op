@@ -3,11 +3,14 @@
 
 import { PCT_LOCALS } from "./pctConfig";
 
+export type ProyeccionGranularidad = "semana" | "mes";
+
 export type Proyeccion = {
   id: string;
   local: string; // uno de PROYECCION_LOCALS
   concepto: string; // concepto exacto del esqueleto MATRIX
-  mes: string; // YYYY-MM
+  granularidad: ProyeccionGranularidad;
+  mes: string; // YYYY-MM (granularidad "mes") o YYYY-Www (granularidad "semana")
   monto: number;
   creadoEn: string;
 };
@@ -52,10 +55,16 @@ function saveProyecciones(list: Proyeccion[]): void {
   }
 }
 
-// Crea o actualiza (si ya existe local+concepto+mes) una proyección.
+// Crea o actualiza (si ya existe local+concepto+período) una proyección.
 export function upsertProyeccion(input: Omit<Proyeccion, "id" | "creadoEn">): Proyeccion[] {
   const list = loadProyecciones();
-  const i = list.findIndex((p) => p.local === input.local && p.concepto === input.concepto && p.mes === input.mes);
+  const i = list.findIndex(
+    (p) =>
+      p.local === input.local &&
+      p.concepto === input.concepto &&
+      p.mes === input.mes &&
+      p.granularidad === input.granularidad,
+  );
   if (i >= 0) {
     list[i] = { ...list[i], monto: input.monto };
   } else {
@@ -76,4 +85,22 @@ export function monthRange(ym: string): [string, string] {
   const first = `${ym}-01`;
   const last = new Date(y, m, 0).getDate();
   return [first, `${ym}-${String(last).padStart(2, "0")}`];
+}
+
+// yyyy-Www → [lunes, domingo] de esa semana ISO
+export function weekRange(weekValue: string): [string, string] {
+  const [yearStr, weekStr] = weekValue.split("-W");
+  const year = Number(yearStr);
+  const week = Number(weekStr);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1) + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return [monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)];
+}
+
+export function periodoRange(granularidad: ProyeccionGranularidad, periodo: string): [string, string] {
+  return granularidad === "semana" ? weekRange(periodo) : monthRange(periodo);
 }
