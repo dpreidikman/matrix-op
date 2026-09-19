@@ -50,18 +50,19 @@ async function connect() {
   const tlsModule = await import("node:tls");
   const tls = ((tlsModule as unknown as { default?: typeof import("node:tls") }).default ??
     tlsModule) as typeof import("node:tls");
-  const currentConnect = tls.connect as typeof tls.connect & { __gedisCompatible?: boolean };
+  type CompatibleTlsConnect = {
+    (options: import("node:tls").ConnectionOptions): import("node:tls").TLSSocket;
+    __gedisCompatible?: boolean;
+  };
+  const currentConnect = tls.connect as CompatibleTlsConnect;
   if (!currentConnect.__gedisCompatible) {
-    const compatibleConnect = ((...args: Parameters<typeof tls.connect>) => {
-      const first = args[0];
-      if (first && typeof first === "object" && "rejectUnauthorized" in first) {
-        const { rejectUnauthorized: _ignored, ...options } = first;
-        return currentConnect.call(tls, options);
-      }
-      return currentConnect.apply(tls, args);
-    }) as typeof currentConnect;
+    const compatibleConnect = ((options: import("node:tls").ConnectionOptions) => {
+      const safeOptions = { ...options };
+      delete safeOptions.rejectUnauthorized;
+      return currentConnect.call(tls, safeOptions);
+    }) as CompatibleTlsConnect;
     compatibleConnect.__gedisCompatible = true;
-    tls.connect = compatibleConnect;
+    (tls as unknown as { connect: CompatibleTlsConnect }).connect = compatibleConnect;
   }
 
   const mod = await import("mssql");
