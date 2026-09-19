@@ -52,12 +52,15 @@ async function connect() {
     throw new Error("No se pudo cargar el driver de SQL Server (mssql) en este entorno.");
   }
   const config: import("mssql").config = {
-    server: process.env.GEDIS_DB_HOST || "gedis.ar",
-    port: Number(process.env.GEDIS_DB_PORT || 1435),
-    database: process.env.GEDIS_DB_NAME || "CentralCosta",
+    server: process.env['GEDIS_DB_HOST'] || "gedis.ar",
+    port: Number(process.env['GEDIS_DB_PORT'] || 1435),
+    database: process.env['GEDIS_DB_NAME'] || "CentralCosta",
     user,
     password,
-    options: { encrypt: true, trustServerCertificate: true },
+    // El runtime publicado no implementa `rejectUnauthorized`, opción que
+    // tedious agrega al negociar TLS. GEDIS expone este puerto sin TLS, por
+    // eso desactivamos el cifrado para que la conexión TCP pueda completarse.
+    options: { encrypt: false },
     connectionTimeout: 10_000,
     requestTimeout: 20_000,
   };
