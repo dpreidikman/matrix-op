@@ -57,10 +57,7 @@ async function connect() {
     database: process.env['GEDIS_DB_NAME'] || "CentralCosta",
     user,
     password,
-    // El runtime publicado no implementa `rejectUnauthorized`, opción que
-    // tedious agrega al negociar TLS. GEDIS expone este puerto sin TLS, por
-    // eso desactivamos el cifrado para que la conexión TCP pueda completarse.
-    options: { encrypt: false },
+    options: { encrypt: true, trustServerCertificate: true },
     connectionTimeout: 10_000,
     requestTimeout: 20_000,
   };
