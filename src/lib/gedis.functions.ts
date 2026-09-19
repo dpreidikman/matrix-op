@@ -47,23 +47,24 @@ async function connect() {
 
   // tedious siempre pasa rejectUnauthorized a tls.connect; el certificado de
   // GEDIS es autofirmado, así que forzamos rejectUnauthorized: false.
-  const tls = await import("node:tls");
-  const tlsAny = tls as unknown as {
+  // El namespace ESM es de sólo lectura: usamos el módulo CJS (mutable).
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  const tlsModule = require("node:tls") as {
     connect: ((...args: unknown[]) => unknown) & { __gedisPatched?: boolean };
-    default?: { connect: ((...args: unknown[]) => unknown) & { __gedisPatched?: boolean } };
   };
-  for (const target of [tlsAny, tlsAny.default]) {
-    if (!target || target.connect.__gedisPatched) continue;
-    const original = target.connect.bind(target);
+  if (!tlsModule.connect.__gedisPatched) {
+    const original = tlsModule.connect.bind(tlsModule);
     const patched = ((...args: unknown[]) => {
       if (args[0] && typeof args[0] === "object") {
         (args[0] as Record<string, unknown>)["rejectUnauthorized"] = false;
       }
       return original(...args);
-    }) as typeof target.connect;
+    }) as typeof tlsModule.connect;
     patched.__gedisPatched = true;
-    target.connect = patched;
+    tlsModule.connect = patched;
   }
+
 
   const mod = await import("mssql");
 
