@@ -1,0 +1,14 @@
+diff --git a/lib/message-io.js b/lib/message-io.js
+index 414d425..c4b9ac1 100644
+--- a/lib/message-io.js
++++ b/lib/message-io.js
+@@ -51,8 +51,7 @@ class MessageIO extends _events.EventEmitter {
+         cleartext: tls.connect({
+           socket: duplexpair.socket1,
+           servername: hostname,
+-          secureContext: secureContext,
+-          rejectUnauthorized: !trustServerCertificate
++          secureContext: secureContext
+         }),
+         encrypted: duplexpair.socket2
+       };

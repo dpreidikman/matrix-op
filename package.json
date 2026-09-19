@@ -11,6 +11,9 @@
     "lint": "eslint .",
     "format": "prettier --write ."
   },
+  "patchedDependencies": {
+    "tedious@20.0.0": "patches/tedious@20.0.0.patch"
+  },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.17",
     "@ai-sdk/react": "^4.0.45",
