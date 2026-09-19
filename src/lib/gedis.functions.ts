@@ -45,7 +45,28 @@ async function connect() {
     );
   }
 
+  // tedious siempre pasa rejectUnauthorized a tls.connect; el certificado de
+  // GEDIS es autofirmado, así que forzamos rejectUnauthorized: false.
+  const tls = await import("node:tls");
+  const tlsAny = tls as unknown as {
+    connect: ((...args: unknown[]) => unknown) & { __gedisPatched?: boolean };
+    default?: { connect: ((...args: unknown[]) => unknown) & { __gedisPatched?: boolean } };
+  };
+  for (const target of [tlsAny, tlsAny.default]) {
+    if (!target || target.connect.__gedisPatched) continue;
+    const original = target.connect.bind(target);
+    const patched = ((...args: unknown[]) => {
+      if (args[0] && typeof args[0] === "object") {
+        (args[0] as Record<string, unknown>)["rejectUnauthorized"] = false;
+      }
+      return original(...args);
+    }) as typeof target.connect;
+    patched.__gedisPatched = true;
+    target.connect = patched;
+  }
+
   const mod = await import("mssql");
+
   // mssql es CommonJS: según el interop, la API real puede estar en `default`.
   const sql = ((mod as unknown as { default?: unknown }).default ?? mod) as typeof import("mssql");
   if (typeof (sql as { ConnectionPool?: unknown }).ConnectionPool !== "function") {
