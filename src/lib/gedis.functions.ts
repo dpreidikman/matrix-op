@@ -45,26 +45,6 @@ async function connect() {
     );
   }
 
-  // workerd implementa TLS, pero rechaza la opción Node `rejectUnauthorized`.
-  // Tedious la agrega siempre; la quitamos antes de cargar el driver.
-  const tlsModule = await import("node:tls");
-  const tls = ((tlsModule as unknown as { default?: typeof import("node:tls") }).default ??
-    tlsModule) as typeof import("node:tls");
-  type CompatibleTlsConnect = {
-    (options: import("node:tls").ConnectionOptions): import("node:tls").TLSSocket;
-    __gedisCompatible?: boolean;
-  };
-  const currentConnect = tls.connect as CompatibleTlsConnect;
-  if (!currentConnect.__gedisCompatible) {
-    const compatibleConnect = ((options: import("node:tls").ConnectionOptions) => {
-      const safeOptions = { ...options };
-      delete safeOptions.rejectUnauthorized;
-      return currentConnect.call(tls, safeOptions);
-    }) as CompatibleTlsConnect;
-    compatibleConnect.__gedisCompatible = true;
-    (tls as unknown as { connect: CompatibleTlsConnect }).connect = compatibleConnect;
-  }
-
   const mod = await import("mssql");
   // mssql es CommonJS: según el interop, la API real puede estar en `default`.
   const sql = ((mod as unknown as { default?: unknown }).default ?? mod) as typeof import("mssql");
